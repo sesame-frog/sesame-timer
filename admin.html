@@ -1,0 +1,1553 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Конструктор таймера — sesame-timer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Playfair+Display:wght@600;700&family=Cinzel:wght@600;700&family=Press+Start+2P&family=Baloo+2:wght@700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<script src="js/config.js"></script>
+<script src="js/supabase.js"></script>
+<script src="js/fonts-extra.js"></script>
+<style>
+  :root {
+    --bg: #121016;
+    --panel: #1b1822;
+    --panel-2: #242030;
+    --panel-3: #2c2838;
+    --line: #38334a;
+    --text: #f1ecf7;
+    --text-dim: #a89dbd;
+    --accent: #ff5fa8;
+    --accent-soft: rgba(255,95,168,.18);
+    --accent-2: #7fd67a;
+    --accent-2-soft: rgba(127,214,122,.15);
+    --blue: #9cc8ff;
+    --blue-soft: rgba(111,179,255,.15);
+    --danger: #ff8fa8;
+    --canvas: #0c0a10;
+    --checker: #17141d;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --ui: 'Manrope', 'Segoe UI', sans-serif;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); font-family: var(--ui); margin: 0; }
+  body { padding: 28px 16px 110px; display: flex; flex-direction: column; align-items: center; }
+
+  #page { width: 100%; max-width: 1180px; display: flex; flex-direction: column; gap: 22px; }
+
+  header { display: flex; flex-direction: column; gap: 4px; }
+  header h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
+  header p { margin: 0; color: var(--text-dim); font-size: 13.5px; line-height: 1.5; max-width: 70ch; }
+
+  .banner {
+    background: var(--accent-2-soft); border: 1px solid rgba(127,214,122,.4); color: #d6f5d3;
+    border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.5;
+  }
+  .banner.warn { background: rgba(255,190,90,.12); border-color: rgba(255,190,90,.4); color: #ffe2b0; }
+
+  .secHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .secHead h2 { margin: 0; font-size: 18px; font-weight: 800; }
+
+  /* ── фильтры ── */
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    appearance: none; border: 1px solid var(--line); background: var(--panel); color: var(--text-dim);
+    font: 700 12.5px var(--ui); padding: 7px 13px; border-radius: 999px; cursor: pointer;
+  }
+  .chip:hover { color: var(--text); }
+  .chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+  /* ── лента скинов ── */
+  #feed {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+  }
+  @media (max-width: 520px) {
+    #feed { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  }
+  .card {
+    background: var(--panel); border: 2px solid transparent; border-radius: 16px; overflow: hidden;
+    display: flex; flex-direction: column; cursor: pointer; transition: border-color .15s, transform .15s;
+    text-align: left; font: inherit; color: inherit; padding: 0;
+  }
+  .card:hover { transform: translateY(-2px); }
+  .card.active { border-color: var(--accent); }
+  .thumb {
+    position: relative; aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center;
+    background:
+      linear-gradient(135deg, var(--checker) 25%, transparent 25%) -8px 0/16px 16px,
+      linear-gradient(135deg, transparent 75%, var(--checker) 75%) -8px 0/16px 16px,
+      linear-gradient(135deg, var(--checker) 25%, transparent 25%) 0 8px/16px 16px,
+      linear-gradient(135deg, transparent 75%, var(--checker) 75%) 0 8px/16px 16px,
+      var(--canvas);
+    overflow: hidden;
+  }
+  .mini { position: relative; width: 100%; container-type: inline-size; }
+  .mini img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+  .mDigits {
+    position: absolute; z-index: 2; white-space: nowrap; line-height: 1; transform: translate(-50%, -50%);
+    font-variant-numeric: tabular-nums; pointer-events: none;
+  }
+  .sticker {
+    position: absolute; top: 8px; left: 8px; z-index: 5; font: 800 10px var(--ui); letter-spacing: .04em;
+    padding: 4px 7px; border-radius: 6px; text-transform: uppercase;
+  }
+  .sticker.buy { background: var(--accent); color: #2a0f1c; }
+  .sticker.cat { background: var(--accent-2); color: #0e2a0c; }
+  .dirtyDot {
+    position: absolute; top: 9px; right: 9px; z-index: 5; width: 10px; height: 10px; border-radius: 50%;
+    background: #ffc15a; box-shadow: 0 0 0 3px rgba(0,0,0,.45);
+  }
+  .cardBody { padding: 10px 12px 13px; display: flex; flex-direction: column; gap: 5px; }
+  .price { font-size: 19px; font-weight: 800; line-height: 1.15; letter-spacing: -.01em; }
+  .price small { font-size: 12px; font-weight: 700; color: var(--text-dim); letter-spacing: 0; }
+  .price.free { color: var(--accent-2); font-size: 16px; }
+  .price.off { color: var(--text-dim); font-size: 14px; font-weight: 700; }
+  .ctitle {
+    font-size: 13px; line-height: 1.35; color: var(--text);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; }
+  .badge { font: 700 10.5px var(--ui); padding: 3px 7px; border-radius: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .b-cat { background: var(--accent-2-soft); color: var(--accent-2); }
+  .b-def { background: var(--blue-soft); color: var(--blue); }
+  .b-code { background: var(--panel-3); color: var(--text-dim); font-family: var(--mono); font-weight: 600; }
+  .addCard {
+    border: 2px dashed var(--line); background: transparent; align-items: center; justify-content: center;
+    min-height: 200px; gap: 8px; color: var(--accent-2);
+  }
+  .addCard:hover { border-color: var(--accent-2); }
+  .addCard .plus { font-size: 34px; font-weight: 800; line-height: 1; }
+  .addCard .lbl { font-weight: 800; font-size: 14px; }
+  .emptyFeed { grid-column: 1 / -1; color: var(--text-dim); font-size: 13px; padding: 10px 2px; }
+
+  /* ── редактор ── */
+  #layout { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 780px) { #layout { grid-template-columns: 1fr; } }
+
+  #previewCard {
+    background: var(--canvas); border: 1px solid var(--line); border-radius: 16px; padding: 18px;
+    display: flex; flex-direction: column; gap: 12px; position: sticky; top: 16px;
+  }
+  @media (max-width: 780px) { #previewCard { position: static; } }
+  #stageWrap {
+    position: relative; width: 100%; border-radius: 10px; overflow: hidden;
+    background:
+      linear-gradient(135deg, var(--checker) 25%, transparent 25%) -12px 0/24px 24px,
+      linear-gradient(135deg, transparent 75%, var(--checker) 75%) -12px 0/24px 24px,
+      linear-gradient(135deg, var(--checker) 25%, transparent 25%) 0 12px/24px 24px,
+      linear-gradient(135deg, transparent 75%, var(--checker) 75%) 0 12px/24px 24px,
+      #100e15;
+    container-type: inline-size; touch-action: none;
+  }
+  #stageWrap img { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; }
+  #digits {
+    position: absolute; z-index: 2; white-space: nowrap; font-variant-numeric: tabular-nums; cursor: grab;
+    user-select: none; line-height: 1; transform: translate(-50%, -50%); touch-action: none;
+  }
+  #digits:active { cursor: grabbing; }
+  .hint { font-size: 12px; color: var(--text-dim); line-height: 1.45; }
+  .hint b { color: var(--accent); font-weight: 700; }
+
+  #panel { display: flex; flex-direction: column; gap: 14px; }
+  .group {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .group h3 {
+    margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--text-dim);
+  }
+  .row { display: flex; flex-direction: column; gap: 6px; }
+  .row .rowhead { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-dim); }
+  .row .val { font-family: var(--mono); color: var(--accent); }
+  .sub { padding-left: 26px; display: flex; flex-direction: column; gap: 10px; }
+  .twoCol { display: flex; gap: 10px; }
+  .twoCol > div { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .twoCol label { font-size: 12px; color: var(--text-dim); }
+
+  .check { display: flex; align-items: flex-start; gap: 9px; font-size: 13.5px; cursor: pointer; line-height: 1.35; }
+  .check input { width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
+
+  .warnText { font-size: 12px; color: #ffcf8a; line-height: 1.45; }
+  .warnText:empty { display: none; }
+
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 3px; background: var(--panel-3); outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid #1b1822; cursor: pointer; margin-top: -6px; }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid #1b1822; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 3px; }
+
+  select, input[type=text], input[type=number], input[type=color] {
+    background: var(--panel-3); border: 1px solid var(--line); color: var(--text); border-radius: 8px;
+    padding: 8px 10px; font: 500 13px var(--ui); width: 100%;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  input[type=color] { padding: 3px; height: 34px; cursor: pointer; }
+  .colorRow { display: flex; gap: 10px; }
+  .colorRow > div { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .colorRow label { font-size: 12px; color: var(--text-dim); }
+
+  #fontGrid {
+    max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+    padding: 2px 4px 4px 2px; margin-right: -6px; position: relative;
+  }
+  .fontGroupTitle { font-size: 11px; font-weight: 700; color: var(--text-dim); letter-spacing: .05em; margin-top: 4px; }
+  .fontTiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+  .fontTile {
+    appearance: none; border: 1px solid var(--line); background: var(--panel-3); color: var(--text);
+    border-radius: 9px; padding: 8px 4px 6px; cursor: pointer; display: flex; flex-direction: column;
+    align-items: center; gap: 4px; min-width: 0;
+  }
+  .fontTile:hover { border-color: var(--accent); }
+  .fontTile.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .ftSample { font-size: 22px; line-height: 1.15; white-space: nowrap; max-width: 100%; overflow: hidden; }
+  .ftName { font: 600 10.5px var(--ui); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  #stackList { display: flex; flex-direction: column; gap: 6px; }
+  .stackRow {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel-3); border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px 7px 7px;
+  }
+  .stackRow.digitsRow { background: var(--accent-soft); border-color: rgba(255,95,168,.55); }
+  .sThumb {
+    width: 64px; height: 36px; border-radius: 6px; flex-shrink: 0; overflow: hidden; position: relative;
+    background:
+      linear-gradient(135deg, var(--checker) 25%, transparent 25%) -4px 0/8px 8px,
+      linear-gradient(135deg, transparent 75%, var(--checker) 75%) -4px 0/8px 8px,
+      linear-gradient(135deg, var(--checker) 25%, transparent 25%) 0 4px/8px 8px,
+      linear-gradient(135deg, transparent 75%, var(--checker) 75%) 0 4px/8px 8px,
+      var(--canvas);
+    display: flex; align-items: center; justify-content: center;
+    font: 800 13px var(--ui); color: var(--accent);
+  }
+  .sThumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .sName { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; line-height: 1.25; }
+  .sName small { display: block; color: var(--text-dim); font-weight: 500; font-size: 11px; }
+  .sBtns { display: flex; gap: 4px; flex-shrink: 0; }
+  .sBtns input[type=file], .addRow input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+  .iconBtn {
+    appearance: none; width: 30px; height: 30px; padding: 0; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--text); font: 800 14px var(--ui); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .iconBtn:hover { border-color: var(--accent); }
+  .iconBtn:disabled { opacity: .3; cursor: default; border-color: var(--line); }
+  .iconBtn.del:hover { border-color: #ff8fa8; color: #ffb3c6; }
+  .addRow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .addRow .btn { flex: 1; text-align: center; }
+  .btn {
+    appearance: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+    font: 700 12.5px var(--ui); padding: 8px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; border-color: var(--line); }
+  .btn.danger { border-color: #6b3040; background: #2c1620; color: #ffb3c6; }
+  .btnRow { display: flex; gap: 8px; flex-wrap: wrap; }
+
+
+  /* ── вход ── */
+  #gate {
+    position: fixed; inset: 0; z-index: 100; background: var(--bg);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  #gateBox {
+    max-width: 420px; width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 28px 24px; display: flex; flex-direction: column; gap: 14px; text-align: center;
+  }
+  #gateBox h1 { margin: 0; font-size: 21px; }
+  #gateBox p { margin: 0; color: var(--text-dim); font-size: 14px; line-height: 1.5; }
+  .twitchBtn {
+    appearance: none; border: none; background: #9146ff; color: #fff; font: 800 15px var(--ui);
+    padding: 13px 18px; border-radius: 11px; cursor: pointer; display: inline-flex; gap: 10px;
+    align-items: center; justify-content: center; text-decoration: none;
+  }
+  .twitchBtn:hover { filter: brightness(1.1); }
+  .linkBtn { color: var(--text-dim); font-size: 13px; background: none; border: none; cursor: pointer; text-decoration: underline; font-family: var(--ui); }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .who { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-dim); }
+  .who img { width: 30px; height: 30px; border-radius: 50%; }
+  .who a { color: var(--blue); }
+
+  /* ── правила донатона ── */
+  .rulesGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .ruleCard {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .ruleCard.off .sub { opacity: .45; }
+  .ruleCard h4 { margin: 0; font-size: 14px; }
+  .steps { display: flex; flex-direction: column; gap: 6px; }
+  .stepRow { display: grid; grid-template-columns: 1fr 1fr 30px; gap: 6px; align-items: center; }
+  .stepHead { font-size: 11px; color: var(--text-dim); }
+  .example { font-size: 12.5px; color: var(--accent-2); line-height: 1.5; }
+  .radioList { display: flex; flex-direction: column; gap: 8px; }
+  .tierRow { display: grid; grid-template-columns: 1fr 110px; gap: 6px; }
+
+  /* ── нижняя панель сохранения ── */
+  #saveBar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: rgba(27,24,34,.94); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-top: 1px solid var(--line); padding: 12px 16px;
+    display: flex; justify-content: center;
+  }
+  #saveBarInner { width: 100%; max-width: 1180px; display: flex; align-items: center; gap: 10px; }
+  #saveStatus { flex: 1; font-size: 13px; color: var(--text-dim); line-height: 1.35; min-width: 0; }
+  #saveStatus.dirty { color: #ffcf8a; }
+  #saveStatus.ok { color: var(--accent-2); }
+  #saveStatus.err { color: var(--danger); }
+  #saveBtn {
+    appearance: none; border: none; background: var(--accent); color: #2a0f1c; font: 800 14px var(--ui);
+    padding: 11px 22px; border-radius: 10px; cursor: pointer;
+  }
+  #saveBtn:disabled { background: var(--panel-3); color: var(--text-dim); cursor: default; }
+  #discardBtn { padding: 11px 14px; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div id="gateBox">
+    <h1>Конструктор таймера</h1>
+    <p id="gateText">Проверяю вход…</p>
+    <button class="twitchBtn" id="loginBtn" hidden>Войти через Twitch</button>
+    <button class="linkBtn" id="logoutBtn2" hidden>Выйти и войти другим аккаунтом</button>
+    <a class="linkBtn" href="./">Перейти в магазин</a>
+  </div>
+</div>
+
+<div id="page">
+  <header>
+    <div class="topbar">
+      <h1>Конструктор таймера — донатон</h1>
+      <div class="who"><img id="meAvatar" alt="" hidden><span id="meName"></span> · <a href="./" target="_blank">Магазин</a> · <button class="linkBtn" id="logoutBtn">Выйти</button></div>
+    </div>
+    <p>Выбери скин в ленте, настрой его ниже и нажми «Сохранить». Основные скины включаются сами по категории на Twitch, а те, что отмечены «можно купить», зрители включают донатом или баллами канала.</p>
+  </header>
+
+  <div id="migrateBanner" class="banner" hidden>Подставила твои скины из старого конструктора. Проверь их и нажми «Сохранить» внизу — тогда они переедут на сайт насовсем.</div>
+
+  <section>
+    <div class="secHead">
+      <h2>Скины</h2>
+      <div class="chips" id="chips">
+        <button class="chip active" data-f="all">Все</button>
+        <button class="chip" data-f="category">По категории Twitch</button>
+        <button class="chip" data-f="buy">Можно купить</button>
+      </div>
+    </div>
+    <div id="feed"></div>
+  </section>
+
+  <section id="editorSec">
+    <div class="secHead"><h2 id="editorTitle">Настройка скина</h2></div>
+    <div id="layout">
+      <div id="previewCard">
+        <div id="stageWrap">
+          <div id="digits">28:41</div>
+        </div>
+        <div class="hint">Тяни <b>цифры</b> мышкой или пальцем, чтобы поставить их куда нужно.</div>
+        <div class="row">
+          <div class="rowhead"><span>Время для примера</span></div>
+          <input type="text" id="previewText" value="28:41" maxlength="8">
+        </div>
+      </div>
+
+      <div id="panel">
+        <div class="group">
+          <h3>Основное</h3>
+          <div class="row">
+            <div class="rowhead"><span>Название скина</span></div>
+            <input type="text" id="skinName" maxlength="40">
+          </div>
+          <div class="row">
+            <div class="rowhead"><span>Код скина</span></div>
+            <input type="text" id="skinCode" maxlength="24" placeholder="например культ">
+            <div class="hint">Одно слово. Его зритель пишет в сообщении доната или в награде за баллы, чтобы включить этот скин.</div>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>Как включается</h3>
+          <label class="check"><input type="checkbox" id="useCategory"> Сам, когда на Twitch стоит эта категория</label>
+          <div class="sub" id="catRows">
+            <div class="row">
+              <input type="text" id="twitchCategory" placeholder="например Cult of the Lamb">
+              <div class="hint">Как пишется на Twitch по-английски. «Общение» там называется Just Chatting.</div>
+            </div>
+          </div>
+          <label class="check"><input type="checkbox" id="isDefault"> По умолчанию — если для категории нет своего скина</label>
+          <label class="check"><input type="checkbox" id="buyable"> Зрители могут купить этот скин</label>
+          <div class="sub" id="buyRows">
+            <div class="twoCol">
+              <div><label for="priceRub">Донат, ₽</label><input type="number" id="priceRub" min="0" step="1" inputmode="numeric" placeholder="—"></div>
+              <div><label for="pointsTier">Баллы канала</label><select id="pointsTier"></select></div>
+            </div>
+            <div class="hint">Пустая цена или «нельзя» — этим способом не купить. Цены наград за баллы общие, они в «Правилах донатона» внизу страницы.</div>
+          </div>
+          <div class="warnText" id="ruleWarn"></div>
+        </div>
+
+        <div class="group">
+          <h3>Слои</h3>
+          <div class="hint">Верхняя строчка — самая передняя. Стрелками ↑ ↓ переноси картинку выше цифр (на передний план) или ниже (в фон).</div>
+          <div id="stackList"></div>
+          <div class="addRow">
+            <label class="btn" for="addBackFile">+ Картинка в фон</label>
+            <input type="file" id="addBackFile" accept="image/*">
+            <label class="btn" for="addFrontFile">+ Картинка вперёд</label>
+            <input type="file" id="addFrontFile" accept="image/*">
+          </div>
+          <div class="warnText" id="layerMsg"></div>
+        </div>
+
+        <div class="group">
+          <h3>Шрифт</h3>
+          <div id="fontGrid"></div>
+          <div class="addRow">
+            <label class="btn" for="fontFile">+ Загрузить свой шрифт</label>
+            <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2">
+            <button class="btn danger" id="fontDelete" hidden>Удалить этот шрифт</button>
+          </div>
+          <div class="hint">Файл .ttf, .otf, .woff или .woff2 — например, скачанный с Google Fonts или dafont. Шрифт появится в списке у всех скинов. Нужны только цифры и двоеточие, так что кириллица в шрифте не обязательна.</div>
+          <div class="hint" id="fontMsg"></div>
+        </div>
+
+        <div class="group">
+          <h3>Размер и положение</h3>
+          <div class="row"><div class="rowhead"><span>Размер</span><span class="val" id="sizeVal"></span></div><input type="range" id="sizeSlider" min="4" max="34" step="0.5"></div>
+          <div class="row"><div class="rowhead"><span>По горизонтали</span><span class="val" id="xVal"></span></div><input type="range" id="xSlider" min="0" max="100" step="0.5"></div>
+          <div class="row"><div class="rowhead"><span>По вертикали</span><span class="val" id="yVal"></span></div><input type="range" id="ySlider" min="0" max="100" step="0.5"></div>
+          <div class="row"><div class="rowhead"><span>Между буквами</span><span class="val" id="lsVal"></span></div><input type="range" id="lsSlider" min="-2" max="10" step="0.5"></div>
+        </div>
+
+        <div class="group">
+          <h3>Цвет</h3>
+          <div class="colorRow">
+            <div><label for="colorPick">Цвет цифр</label><input type="color" id="colorPick"></div>
+            <div><label for="glowPick">Цвет свечения</label><input type="color" id="glowPick"></div>
+          </div>
+          <div class="row"><div class="rowhead"><span>Сила свечения</span><span class="val" id="glowVal"></span></div><input type="range" id="glowSlider" min="0" max="40" step="1"></div>
+        </div>
+
+        <div class="group">
+          <div class="btnRow">
+            <button class="btn" id="resetBtn">Вернуть стандартный вид</button>
+            <button class="btn danger" id="deleteBtn">Удалить скин</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="group" id="rulesSec">
+    <h3>Правила донатона (для всех скинов)</h3>
+    <div class="hint">Галочка — работает, нет галочки — не работает. Время на таймер начнёт добавляться, когда подключим донаты и Twitch (следующий этап), но настроить всё можно уже сейчас.</div>
+    <div class="rulesGrid">
+      <div class="ruleCard" data-card="donations.on">
+        <label class="check"><input type="checkbox" data-s="donations.on"> <b>Донаты добавляют время</b></label>
+        <div class="sub">
+          <div class="row" id="rubRow"><div class="rowhead"><span>Сколько ₽ = 1 минута</span></div><input type="number" min="1" step="1" inputmode="numeric" data-s="donations.rubPerMinute"></div>
+          <label class="check"><input type="checkbox" data-s="donations.stepsOn"> Ступени: чем больше донат, тем выгоднее</label>
+          <div class="hint" id="stepsHint">Каждая часть суммы считается по своей ступени: первые 100 ₽ — по первой ставке, следующие — по второй и так далее.</div>
+          <div class="steps" id="stepsBox"></div>
+          <div class="example" id="donExample"></div>
+        </div>
+      </div>
+      <div class="ruleCard" data-card="subs.on">
+        <label class="check"><input type="checkbox" data-s="subs.on"> <b>Подписки добавляют время</b></label>
+        <div class="sub">
+          <div class="twoCol">
+            <div><label>Уровень 1, мин</label><input type="number" min="0" step="0.5" data-s="subs.t1"></div>
+            <div><label>Уровень 2, мин</label><input type="number" min="0" step="0.5" data-s="subs.t2"></div>
+            <div><label>Уровень 3, мин</label><input type="number" min="0" step="0.5" data-s="subs.t3"></div>
+          </div>
+          <div class="hint">Подарочные подписки считаются так же — за каждую подаренную.</div>
+        </div>
+      </div>
+      <div class="ruleCard" data-card="bits.on">
+        <label class="check"><input type="checkbox" data-s="bits.on"> <b>Битсы добавляют время</b></label>
+        <div class="sub">
+          <div class="row"><div class="rowhead"><span>Сколько битсов = 1 минута</span></div><input type="number" min="1" step="1" data-s="bits.bitsPerMinute"></div>
+        </div>
+      </div>
+      <div class="ruleCard" data-card="points.on">
+        <label class="check"><input type="checkbox" data-s="points.on"> <b>Награда за баллы «+ время»</b></label>
+        <div class="sub">
+          <div class="twoCol">
+            <div><label>Цена, баллов</label><input type="number" min="1" step="1" data-s="points.cost"></div>
+            <div><label>Добавляет, минут</label><input type="number" min="0.5" step="0.5" data-s="points.minutes"></div>
+          </div>
+          <div class="hint">Сайт сам создаст эту награду на Twitch и спрячет её, когда донатон не идёт.</div>
+        </div>
+      </div>
+      <div class="ruleCard">
+        <h4>Награды за баллы для скинов</h4>
+        <div class="hint">Одна награда на уровень: зритель берёт её и пишет код скина. Пустая цена — уровня нет.</div>
+        <div class="tierRow"><input type="text" maxlength="45" data-s="pointTiers.0.name"><input type="number" min="1" step="1" placeholder="цена" data-s="pointTiers.0.cost"></div>
+        <div class="tierRow"><input type="text" maxlength="45" data-s="pointTiers.1.name"><input type="number" min="1" step="1" placeholder="цена" data-s="pointTiers.1.cost"></div>
+        <div class="tierRow"><input type="text" maxlength="45" data-s="pointTiers.2.name"><input type="number" min="1" step="1" placeholder="цена" data-s="pointTiers.2.cost"></div>
+      </div>
+      <div class="ruleCard">
+        <h4>Покупка скина донатом</h4>
+        <div class="radioList">
+          <label class="check"><input type="radio" name="skinMode" value="skin_only" data-s="skinPurchase"> Только смена скина — время не добавляется</label>
+          <label class="check"><input type="radio" name="skinMode" value="skin_plus_time" data-s="skinPurchase"> Скин + минуты по обычной цене</label>
+          <label class="check"><input type="radio" name="skinMode" value="viewer_choice" data-s="skinPurchase"> Зритель решает сам галочкой в магазине</label>
+        </div>
+        <div class="row"><div class="rowhead"><span>Купленный скин держится, минут</span></div><input type="number" min="1" step="1" data-s="boughtMinutes"></div>
+      </div>
+      <div class="ruleCard">
+        <h4>Время таймера</h4>
+        <div class="row"><div class="rowhead"><span>На старте, минут</span></div><input type="number" min="0" step="1" data-s="startMinutes"></div>
+        <label class="check"><input type="checkbox" data-s="capOn"> Потолок — больше этого таймер не растёт</label>
+        <div class="row" id="capRow"><div class="rowhead"><span>Потолок, минут</span></div><input type="number" min="1" step="1" data-s="capMinutes"></div>
+      </div>
+      <div class="ruleCard">
+        <h4>Куда донатить</h4>
+        <div class="row"><div class="rowhead"><span>Ссылка на твою страницу доната</span></div><input type="text" data-s="donationUrl" placeholder="https://www.donationalerts.com/r/…"></div>
+        <div class="hint">Сюда магазин отправляет зрителей, когда они покупают скин.</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="saveBar">
+  <div id="saveBarInner">
+    <span id="saveStatus">Загружаю сохранённое…</span>
+    <button class="btn" id="discardBtn" hidden>Отменить</button>
+    <button id="saveBtn" disabled>Сохранить</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const BUILTIN = [
+    { key:'swamp', label:'ИРЛ / общение', w:1774, h:887, img:'assets/skins/swamp.png',
+      font:"'Playfair Display', serif", weight:700, color:'#f2f8ff', glow:'#6fb3ff', glowAmt:26, size:22, x:50, y:38, ls:1,
+      useCategory:true, twitchCategory:'Just Chatting', isDefault:true, code:'болото' },
+    { key:'cult', label:'Cult of the Lamb', w:1983, h:793, img:'assets/skins/cult.png',
+      font:"'Cinzel', serif", weight:700, color:'#f3e6c8', glow:'#b3140f', glowAmt:28, size:23, x:50, y:42, ls:3,
+      useCategory:true, twitchCategory:'Cult of the Lamb', isDefault:false, code:'культ' },
+    { key:'vending', label:'Vending Machine', w:1774, h:887, img:'assets/skins/vending.png',
+      font:"'Press Start 2P', monospace", weight:400, color:'#eafcff', glow:'#ff2fd0', glowAmt:22, size:15, x:50, y:42, ls:2,
+      useCategory:true, twitchCategory:'Interdimensional Vending Machine', isDefault:false, code:'автомат' },
+    { key:'jackbox', label:'Jackbox Party Pack', w:1774, h:887, img:'assets/skins/jackbox.png',
+      font:"'Baloo 2', cursive", weight:800, color:'#ffffff', glow:'#c95fff', glowAmt:22, size:22, x:50, y:45, ls:1,
+      useCategory:true, twitchCategory:'The Jackbox Party Pack', isDefault:false, code:'джекбокс' },
+  ];
+
+  const FONT_OPTIONS = [
+    { label:'Playfair Display (изящный, тонкий)', value:"'Playfair Display', serif", weight:700 },
+    { label:'Cinzel (ритуальный, строгий)', value:"'Cinzel', serif", weight:700 },
+    { label:'Press Start 2P (пиксельный)', value:"'Press Start 2P', monospace", weight:400 },
+    { label:'Baloo 2 (мультяшный, круглый)', value:"'Baloo 2', cursive", weight:800 },
+    { label:'Manrope (простой, нейтральный)', value:"'Manrope', sans-serif", weight:800 },
+  ];
+
+  const FIELDS = ['key','label','builtin','order','w','h','stack','font','weight','color','glow','glowAmt',
+    'size','x','y','ls','useCategory','twitchCategory','isDefault','buyable','priceRub','pricePoints','pointsTier','code'];
+  const STYLE_FIELDS = ['font','weight','color','glow','glowAmt','size','x','y','ls'];
+  const MAX_W = 1900;
+  const CFG = window.SITE_CONFIG;
+  const DEFAULT_SETTINGS = {
+    boughtMinutes: 30,
+    donationUrl: CFG.defaultDonationUrl,
+    skinPurchase: 'viewer_choice',
+    startMinutes: 60, capOn: false, capMinutes: 720,
+    donations: { on: true, rubPerMinute: 10, stepsOn: true,
+      steps: [ { from: 0, secPerRub: 6 }, { from: 100, secPerRub: 7 }, { from: 500, secPerRub: 8 }, { from: 1500, secPerRub: 10 } ] },
+    subs: { on: false, t1: 5, t2: 10, t3: 25 },
+    bits: { on: false, bitsPerMinute: 100 },
+    points: { on: false, cost: 5000, minutes: 1 },
+    pointTiers: [ { id: 't1', name: 'Сменить скин таймера', cost: 1000 },
+                  { id: 't2', name: 'Редкий скин таймера', cost: 5000 },
+                  { id: 't3', name: 'Особый скин таймера', cost: null } ]
+  };
+  function mergeDeep(base, over){
+    if (Array.isArray(base)) {
+      if (!Array.isArray(over)) return JSON.parse(JSON.stringify(base));
+      if (base.length && typeof base[0] === 'object' && over.every(x => x && typeof x === 'object') && base[0].id) {
+        return base.map((b, i) => mergeDeep(b, over[i] || {}));
+      }
+      return JSON.parse(JSON.stringify(over));
+    }
+    if (base && typeof base === 'object') {
+      const out = {};
+      Object.keys(base).forEach(k => { out[k] = (over && over[k] !== undefined) ? mergeDeep(base[k], over[k]) : JSON.parse(JSON.stringify(base[k])); });
+      if (over && typeof over === 'object') Object.keys(over).forEach(k => { if (!(k in out)) out[k] = over[k]; });
+      return out;
+    }
+    return over === undefined ? base : over;
+  }
+  function normalizeSettings(s){ return mergeDeep(DEFAULT_SETTINGS, s || {}); }
+
+  const $ = id => document.getElementById(id);
+  const clone = o => JSON.parse(JSON.stringify(o));
+
+  function defaultOf(b){
+    return { key:b.key, label:b.label, builtin:true, order:0, w:b.w, h:b.h, stack:[{ img:'builtin' }, { digits:true }],
+      font:b.font, weight:b.weight, color:b.color, glow:b.glow, glowAmt:b.glowAmt, size:b.size, x:b.x, y:b.y, ls:b.ls,
+      useCategory:b.useCategory, twitchCategory:b.twitchCategory, isDefault:b.isDefault,
+      buyable:false, priceRub:null, pricePoints:null, pointsTier:null, code:b.code };
+  }
+  function newCustom(key, label){
+    return { key, label, builtin:false, order:Date.now(), w:1774, h:887, stack:[{ digits:true }],
+      font:"'Manrope', sans-serif", weight:800, color:'#ffffff', glow:'#5fc9ff', glowAmt:24, size:20, x:50, y:45, ls:1,
+      useCategory:false, twitchCategory:'', isDefault:false, buyable:true, priceRub:null, pricePoints:null, pointsTier:null, code:'' };
+  }
+  // слои: массив снизу вверх, элементы {img: ссылка} или {digits: true} (ровно один)
+  function cleanStack(st){
+    const out = []; let hasDigits = false;
+    (Array.isArray(st) ? st : []).forEach(x => {
+      if (x && x.digits && !hasDigits) { out.push({ digits: true }); hasDigits = true; }
+      else if (x && typeof x.img === 'string' && x.img) out.push({ img: x.img });
+    });
+    if (!hasDigits) out.push({ digits: true });
+    return out;
+  }
+  function stackFrom(back, front){
+    const st = []; if (back) st.push({ img: back }); st.push({ digits: true }); if (front) st.push({ img: front }); return st;
+  }
+  function splitStack(st){
+    const di = st.findIndex(x => x.digits);
+    const b = st.slice(0, di).find(x => x.img), f = st.slice(di + 1).find(x => x.img);
+    return { back: b ? b.img : null, front: f ? f.img : null };
+  }
+  function normalize(obj, base){
+    const out = Object.assign({}, base);
+    FIELDS.forEach(f => { if (obj && obj[f] !== undefined) out[f] = obj[f]; });
+    // старый формат: back / front
+    if (obj && obj.stack === undefined && (obj.back !== undefined || obj.front !== undefined)) {
+      const was = splitStack(cleanStack(base.stack));
+      out.stack = stackFrom(obj.back !== undefined ? obj.back : was.back, obj.front !== undefined ? obj.front : was.front);
+    }
+    out.stack = cleanStack(out.stack);
+    return out;
+  }
+  function imageCount(s){ return s.stack.filter(x => x.img).length; }
+  function builtinDefaults(){
+    const o = {}; BUILTIN.forEach(b => { o[b.key] = defaultOf(b); }); return o;
+  }
+  function newKey(){ return 'skin-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+  // ── состояние ──
+  let saved = builtinDefaults();        // что сохранено
+  let drafts = builtinDefaults();       // что сейчас на экране
+  const dirty = new Set();              // ключи с несохранёнными правками
+  const removed = new Set();            // удалённые, но ещё не сохранённые
+  let savedSettings = normalizeSettings({});
+  let draftSettings = normalizeSettings({});
+  let settingsDirty = false;
+  let needMigratedFlag = false;
+  let mode = 'loading';                 // loading | cloud
+  const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey);
+  let streamer = null;                  // строка стримера из базы
+  const urlCache = {};
+  let activeKey = 'swamp';
+  let filter = 'all';
+  let saving = false;
+  let statusOverride = null;            // {cls, text}
+
+  // ── элементы ──
+  const feed = $('feed'), stageWrap = $('stageWrap');
+  const digitsEl = $('digits'), previewText = $('previewText');
+  const skinName = $('skinName'), skinCode = $('skinCode');
+  const useCategory = $('useCategory'), twitchCategory = $('twitchCategory'), catRows = $('catRows');
+  const isDefault = $('isDefault'), buyable = $('buyable'), buyRows = $('buyRows');
+  const priceRub = $('priceRub'), pointsTier = $('pointsTier'), ruleWarn = $('ruleWarn');
+  const stackList = $('stackList'), addBackFile = $('addBackFile'), addFrontFile = $('addFrontFile'), layerMsg = $('layerMsg');
+  const MAX_IMAGES = 8;
+  const fontGrid = $('fontGrid');
+  const sizeSlider = $('sizeSlider'), xSlider = $('xSlider'), ySlider = $('ySlider'), lsSlider = $('lsSlider');
+  const glowSlider = $('glowSlider'), colorPick = $('colorPick'), glowPick = $('glowPick');
+  const resetBtn = $('resetBtn'), deleteBtn = $('deleteBtn');
+  const saveBtn = $('saveBtn'), discardBtn = $('discardBtn'), saveStatus = $('saveStatus');
+
+  // ── свои шрифты ──
+  const fontFile = $('fontFile'), fontDelete = $('fontDelete'), fontMsg = $('fontMsg');
+  const FONT_TYPES = { ttf: 'font/ttf', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2' };
+  let customFonts = [];                 // {id, name, family, ref, type, order}
+  const loadedFamilies = new Set();
+  const fontCss = family => "'" + family + "', sans-serif";
+
+  function ensureFontLoaded(f){
+    if (loadedFamilies.has(f.family)) return;
+    loadedFamilies.add(f.family);
+    try {
+      const face = new FontFace(f.family, 'url("' + refUrl(f.ref) + '")');
+      face.load().then(ff => { document.fonts.add(ff); }).catch(() => { loadedFamilies.delete(f.family); });
+    } catch (e) { loadedFamilies.delete(f.family); }
+  }
+
+  function setCustomFonts(list){
+    customFonts = list.slice().sort((a, z) => (a.order || 0) - (z.order || 0));
+    customFonts.forEach(ensureFontLoaded);
+    rebuildFontSelect();
+  }
+
+  // ── подборка шрифтов, встроенных прямо в страницу (только цифры и двоеточие) ──
+  const EXTRA_FONTS = window.EXTRA_FONTS || [];
+
+  function fontGroups(){
+    const groups = [];
+    if (customFonts.length) groups.push({ title: 'Мои шрифты', fonts: customFonts.map(f => ({ value: fontCss(f.family), name: f.name, weight: 400 })) });
+    groups.push({ title: 'Основные', fonts: FONT_OPTIONS.map(f => ({ value: f.value, name: f.label.split(' (')[0], weight: f.weight })) });
+    EXTRA_FONTS.forEach(f => {
+      let g = groups.find(x => x.title === f.group);
+      if (!g) { g = { title: f.group, fonts: [] }; groups.push(g); }
+      g.fonts.push({ value: "'" + f.family + "', sans-serif", name: f.family, weight: f.w, colorFont: f.color });
+    });
+    return groups;
+  }
+
+  function rebuildFontSelect(){
+    const want = drafts[activeKey] ? drafts[activeKey].font : null;
+    fontGrid.innerHTML = '';
+    let found = false;
+    fontGroups().forEach(g => {
+      const h = document.createElement('div'); h.className = 'fontGroupTitle'; h.textContent = g.title;
+      fontGrid.appendChild(h);
+      const wrap = document.createElement('div'); wrap.className = 'fontTiles';
+      g.fonts.forEach(f => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'fontTile'; b.dataset.value = f.value;
+        if (f.value === want) { b.classList.add('active'); found = true; }
+        const s = document.createElement('span'); s.className = 'ftSample'; s.textContent = '28:41';
+        s.style.fontFamily = f.value; s.style.fontWeight = f.weight;
+        const n = document.createElement('span'); n.className = 'ftName'; n.textContent = f.name;
+        b.appendChild(s); b.appendChild(n);
+        b.addEventListener('click', () => pickFont(f.value, f.weight));
+        wrap.appendChild(b);
+      });
+      fontGrid.appendChild(wrap);
+    });
+    if (want && !found) {
+      const note = document.createElement('div'); note.className = 'hint';
+      note.textContent = 'Шрифт этого скина ещё загружается или был удалён.';
+      fontGrid.insertBefore(note, fontGrid.firstChild);
+    }
+    fontDelete.hidden = !customFonts.some(f => fontCss(f.family) === want);
+    const act = fontGrid.querySelector('.fontTile.active');
+    if (act) fontGrid.scrollTop = Math.max(0, act.offsetTop - 40);
+  }
+
+  function markActiveFont(){
+    const want = cur().font;
+    fontGrid.querySelectorAll('.fontTile').forEach(t => t.classList.toggle('active', t.dataset.value === want));
+    fontDelete.hidden = !customFonts.some(f => fontCss(f.family) === want);
+  }
+
+  function bufToDataUrl(buf, type){
+    const bytes = new Uint8Array(buf); let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return 'data:' + type + ';base64,' + btoa(bin);
+  }
+
+  async function handleFontFile(){
+    const file = fontFile.files[0];
+    fontFile.value = '';
+    if (!file) return;
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const type = FONT_TYPES[ext];
+    if (!type) { fontMsg.textContent = 'Это не файл шрифта — нужен .ttf, .otf, .woff или .woff2.'; return; }
+    if (file.size > 15 * 1024 * 1024) { fontMsg.textContent = 'Файл шрифта слишком большой.'; return; }
+    if (!streamer) { fontMsg.textContent = 'Сначала войди через Twitch.'; return; }
+    fontMsg.textContent = 'Загружаю шрифт…';
+    const name = file.name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim().slice(0, 40) || 'Мой шрифт';
+    const id = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const family = 'UF ' + id;
+    let buf;
+    try {
+      buf = await file.arrayBuffer();
+      const ff = new FontFace(family, buf);
+      await ff.load();
+      document.fonts.add(ff);
+      loadedFamilies.add(family);
+    } catch (e) { fontMsg.textContent = 'Этот файл не читается как шрифт — попробуй другой.'; return; }
+    const entry = { id, name, family, type, order: Date.now(), ref: null };
+    try {
+      const path = streamer.id + '/' + id + '.' + ext;
+      const up = await sb.storage.from('fonts').upload(path, new Blob([buf], { type }), { contentType: type, upsert: false });
+      if (up.error) throw up.error;
+      const ins = await sb.from('fonts').insert({ id, streamer_id: streamer.id, name, family, path, type, sort: entry.order });
+      if (ins.error) throw ins.error;
+      entry.ref = 'sb:fonts/' + path;
+    } catch (e) {
+      fontMsg.textContent = e && e.code === 'too_large' ? 'Файл шрифта слишком большой.' : 'Не получилось сохранить шрифт — попробуй ещё раз.';
+      return;
+    }
+    if (!customFonts.some(f => f.id === id)) setCustomFonts(customFonts.concat([entry]));
+    styleChange(s => { s.font = fontCss(family); s.weight = 400; });
+    rebuildFontSelect();
+    fontMsg.textContent = 'Шрифт «' + name + '» добавлен и выбран для этого скина. Не забудь «Сохранить».';
+  }
+  fontFile.addEventListener('change', handleFontFile);
+
+  fontDelete.addEventListener('click', async () => {
+    const f = customFonts.find(x => fontCss(x.family) === cur().font);
+    if (!f) return;
+    const users = orderedKeys().filter(k => drafts[k].font === fontCss(f.family) && k !== activeKey).map(k => '«' + drafts[k].label + '»');
+    if (users.length) { fontMsg.textContent = 'Этот шрифт стоит ещё у скинов ' + users.join(', ') + ' — сначала поменяй шрифт там.'; return; }
+    if (!confirm('Удалить шрифт «' + f.name + '» насовсем? У этого скина шрифт сменится на обычный.')) return;
+    try {
+      const del = await sb.from('fonts').delete().eq('id', f.id);
+      if (del.error) throw del.error;
+      if (f.ref && f.ref.indexOf('sb:fonts/') === 0) { try { await sb.storage.from('fonts').remove([f.ref.slice(9)]); } catch (e) {} }
+    } catch (e) { fontMsg.textContent = 'Не получилось удалить шрифт — попробуй ещё раз.'; return; }
+    setCustomFonts(customFonts.filter(x => x.id !== f.id));
+    styleChange(s => { s.font = "'Manrope', sans-serif"; s.weight = 800; });
+    rebuildFontSelect();
+    fontMsg.textContent = 'Шрифт удалён.';
+  });
+
+  function cur(){ return drafts[activeKey]; }
+
+  function orderedKeys(){
+    const b = BUILTIN.map(x => x.key).filter(k => drafts[k]);
+    const c = Object.keys(drafts).filter(k => !drafts[k].builtin).sort((a, z) => (drafts[a].order || 0) - (drafts[z].order || 0));
+    return b.concat(c);
+  }
+
+  function refUrl(ref, key){
+    if (!ref) return '';
+    if (ref === 'builtin') { const b = BUILTIN.find(x => x.key === key); return b ? b.img : ''; }
+    if (ref.indexOf('sb:') === 0) return CFG.supabaseUrl + '/storage/v1/object/public/' + ref.slice(3);
+    if (ref.indexOf('asset:') === 0) return '';
+    return ref;
+  }
+
+  function styleDigits(el, s){
+    el.style.left = s.x + '%';
+    el.style.top = s.y + '%';
+    el.style.fontFamily = s.font;
+    el.style.fontWeight = s.weight;
+    el.style.fontSize = s.size + 'cqw';
+    el.style.letterSpacing = (s.ls / 7) + 'cqw';
+    el.style.color = s.color;
+    const g = s.glowAmt / 7;
+    el.style.textShadow = '0 0 0.45cqw #000, 0 0.3cqw 0.9cqw rgba(0,0,0,.7), 0 0 ' + (g * 0.5) + 'cqw ' + s.glow + ', 0 0 ' + g + 'cqw ' + s.glow;
+  }
+
+  function fmt(n){ return Number(n).toLocaleString('ru-RU'); }
+
+  // ── лента ──
+  function passesFilter(s){
+    if (filter === 'category') return s.useCategory || s.isDefault;
+    if (filter === 'buy') return s.buyable;
+    return true;
+  }
+
+  function buildCard(s){
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'card' + (s.key === activeKey ? ' active' : '');
+    card.dataset.key = s.key;
+
+    const thumb = document.createElement('div'); thumb.className = 'thumb';
+    const mini = document.createElement('div'); mini.className = 'mini';
+    mini.style.aspectRatio = s.w + ' / ' + s.h;
+    s.stack.forEach((it, idx) => {
+      if (it.digits) {
+        const d = document.createElement('div'); d.className = 'mDigits'; d.textContent = previewText.value || '28:41';
+        styleDigits(d, s); d.style.zIndex = idx + 1; mini.appendChild(d);
+        return;
+      }
+      const u = refUrl(it.img, s.key); if (!u) return;
+      const i = new Image(); i.alt = ''; i.src = u; i.style.zIndex = idx + 1; mini.appendChild(i);
+    });
+    thumb.appendChild(mini);
+    if (s.buyable) { const st = document.createElement('span'); st.className = 'sticker buy'; st.textContent = 'Покупка'; thumb.appendChild(st); }
+    else if (s.useCategory || s.isDefault) { const st = document.createElement('span'); st.className = 'sticker cat'; st.textContent = 'Авто'; thumb.appendChild(st); }
+    if (dirty.has(s.key)) { const dd = document.createElement('span'); dd.className = 'dirtyDot'; dd.title = 'Не сохранено'; thumb.appendChild(dd); }
+    card.appendChild(thumb);
+
+    const body = document.createElement('div'); body.className = 'cardBody';
+    const price = document.createElement('div'); price.className = 'price';
+    if (s.buyable) {
+      const pts = tierCost(s.pointsTier);
+      if (s.priceRub) {
+        price.textContent = fmt(s.priceRub) + ' ₽';
+        if (pts) { const sm = document.createElement('small'); sm.textContent = ' · ' + fmt(pts) + ' баллов'; price.appendChild(sm); }
+      } else if (pts) {
+        price.textContent = fmt(pts) + ' баллов';
+      } else { price.className = 'price off'; price.textContent = 'Цена не задана'; }
+    } else if (s.useCategory || s.isDefault) {
+      price.className = 'price free'; price.textContent = 'Включается сам';
+    } else { price.className = 'price off'; price.textContent = 'Не используется'; }
+    body.appendChild(price);
+
+    const t = document.createElement('div'); t.className = 'ctitle'; t.textContent = s.label || 'Без названия';
+    body.appendChild(t);
+
+    const badges = document.createElement('div'); badges.className = 'badges';
+    if (s.useCategory && s.twitchCategory) { const b = document.createElement('span'); b.className = 'badge b-cat'; b.textContent = s.twitchCategory; badges.appendChild(b); }
+    if (s.isDefault) { const b = document.createElement('span'); b.className = 'badge b-def'; b.textContent = 'по умолчанию'; badges.appendChild(b); }
+    if (s.code) { const b = document.createElement('span'); b.className = 'badge b-code'; b.textContent = '#' + s.code; badges.appendChild(b); }
+    if (badges.children.length) body.appendChild(badges);
+    card.appendChild(body);
+
+    card.addEventListener('click', () => {
+      selectSkin(s.key);
+      if (window.innerWidth < 780) $('editorSec').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return card;
+  }
+
+  function renderFeed(){
+    feed.innerHTML = '';
+    const keys = orderedKeys().filter(k => passesFilter(drafts[k]));
+    keys.forEach(k => feed.appendChild(buildCard(drafts[k])));
+    if (!keys.length) {
+      const e = document.createElement('div'); e.className = 'emptyFeed';
+      e.textContent = filter === 'buy' ? 'Пока ни один скин не продаётся — отметь «Зрители могут купить» у нужного.' : 'Здесь пока пусто.';
+      feed.appendChild(e);
+    }
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'card addCard';
+    add.innerHTML = '<span class="plus">+</span><span class="lbl">Новый скин</span>';
+    add.addEventListener('click', addSkin);
+    feed.appendChild(add);
+  }
+
+  function refreshCard(key){
+    const old = feed.querySelector('.card[data-key="' + key + '"]');
+    if (!drafts[key]) { if (old) old.remove(); return; }
+    if (!passesFilter(drafts[key])) { if (old) old.remove(); return; }
+    if (old) old.replaceWith(buildCard(drafts[key])); else renderFeed();
+  }
+
+  function updateActiveMini(){
+    const card = feed.querySelector('.card[data-key="' + activeKey + '"] .mDigits');
+    if (card) styleDigits(card, cur());
+  }
+
+  // ── редактор ──
+  function applyStageImages(){
+    const s = cur();
+    stageWrap.style.aspectRatio = s.w + ' / ' + s.h;
+    stageWrap.querySelectorAll('img.layerImg').forEach(n => n.remove());
+    s.stack.forEach((it, idx) => {
+      if (it.digits) { digitsEl.style.zIndex = idx + 1; return; }
+      const u = refUrl(it.img, s.key); if (!u) return;
+      const im = new Image(); im.className = 'layerImg'; im.alt = ''; im.src = u; im.style.zIndex = idx + 1;
+      stageWrap.appendChild(im);
+    });
+    renderStack();
+  }
+
+  function iconBtn(text, title, disabled, onClick, extra){
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'iconBtn' + (extra ? ' ' + extra : '');
+    b.textContent = text; b.title = title; b.setAttribute('aria-label', title); b.disabled = disabled;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function renderStack(){
+    const s = cur();
+    stackList.innerHTML = '';
+    const n = s.stack.length;
+    const di = s.stack.findIndex(x => x.digits);
+    const numbers = {}; let c = 0;
+    s.stack.forEach((it, i) => { if (it.img) numbers[i] = ++c; });
+    for (let i = n - 1; i >= 0; i--) {
+      const it = s.stack[i];
+      const row = document.createElement('div');
+      row.className = 'stackRow' + (it.digits ? ' digitsRow' : '');
+      const th = document.createElement('div'); th.className = 'sThumb';
+      if (it.digits) th.textContent = '00:00';
+      else { const im = new Image(); im.alt = ''; im.src = refUrl(it.img, s.key); th.appendChild(im); }
+      row.appendChild(th);
+      const nm = document.createElement('div'); nm.className = 'sName';
+      if (it.digits) nm.textContent = 'Цифры таймера';
+      else {
+        nm.textContent = it.img === 'builtin' ? 'Стандартная картинка' : 'Картинка ' + numbers[i];
+        const sm = document.createElement('small'); sm.textContent = i > di ? 'перед цифрами' : 'за цифрами';
+        nm.appendChild(sm);
+      }
+      row.appendChild(nm);
+      const btns = document.createElement('div'); btns.className = 'sBtns';
+      btns.appendChild(iconBtn('↑', 'Выше', i === n - 1, () => moveLayer(i, 1)));
+      btns.appendChild(iconBtn('↓', 'Ниже', i === 0, () => moveLayer(i, -1)));
+      if (!it.digits) {
+        const fid = 'replFile' + i;
+        const lab = document.createElement('label');
+        lab.className = 'iconBtn'; lab.htmlFor = fid; lab.title = 'Заменить картинку'; lab.textContent = '⇄';
+        const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.id = fid;
+        inp.addEventListener('change', () => handleFile(inp, { replace: it }));
+        btns.appendChild(lab); btns.appendChild(inp);
+        btns.appendChild(iconBtn('✕', 'Убрать картинку', false, () => removeLayer(i), 'del'));
+      }
+      row.appendChild(btns);
+      stackList.appendChild(row);
+    }
+  }
+
+  function renderStage(){
+    const s = cur();
+    digitsEl.textContent = previewText.value || '28:41';
+    styleDigits(digitsEl, s);
+    $('sizeVal').textContent = s.size;
+    $('xVal').textContent = s.x + '%';
+    $('yVal').textContent = s.y + '%';
+    $('lsVal').textContent = s.ls;
+    $('glowVal').textContent = s.glowAmt;
+  }
+
+  function renderRules(){
+    const s = cur();
+    catRows.hidden = !s.useCategory;
+    buyRows.hidden = !s.buyable;
+    const warns = [];
+    const others = orderedKeys().filter(k => k !== s.key).map(k => drafts[k]);
+    const code = (s.code || '').trim().toLowerCase();
+    if (s.buyable && !code) warns.push('Задай код скина — по нему бот поймёт, какой скин купили.');
+    if (s.buyable && !s.priceRub && !tierCost(s.pointsTier)) warns.push('Укажи цену хотя бы в рублях или в баллах.');
+    if (code) {
+      const dup = others.find(o => (o.code || '').trim().toLowerCase() === code);
+      if (dup) warns.push('Такой код уже у скина «' + dup.label + '» — сделай разные.');
+    }
+    const cat = (s.twitchCategory || '').trim().toLowerCase();
+    if (s.useCategory && !cat) warns.push('Впиши категорию Twitch.');
+    if (s.useCategory && cat) {
+      const dup = others.find(o => o.useCategory && (o.twitchCategory || '').trim().toLowerCase() === cat);
+      if (dup) warns.push('Эта категория уже привязана к скину «' + dup.label + '».');
+    }
+    if (!imageCount(s)) warns.push('У скина пока нет ни одной картинки — добавь в блоке «Слои».');
+    if (!orderedKeys().some(k => drafts[k].isDefault)) warns.push('Ни один скин не отмечен «по умолчанию» — отметь один, иначе в незнакомой категории таймер останется без вида.');
+    ruleWarn.textContent = warns.join(' ');
+  }
+
+  function selectSkin(key){
+    if (!drafts[key]) key = orderedKeys()[0];
+    activeKey = key;
+    const s = cur();
+    feed.querySelectorAll('.card[data-key]').forEach(c => c.classList.toggle('active', c.dataset.key === key));
+    $('editorTitle').textContent = 'Настройка: ' + (s.label || 'без названия');
+    skinName.value = s.label || '';
+    skinCode.value = s.code || '';
+    useCategory.checked = !!s.useCategory;
+    twitchCategory.value = s.twitchCategory || '';
+    isDefault.checked = !!s.isDefault;
+    buyable.checked = !!s.buyable;
+    priceRub.value = s.priceRub == null ? '' : s.priceRub;
+    fillTierSelect(s.pointsTier);
+    rebuildFontSelect();
+    fontMsg.textContent = '';
+    sizeSlider.value = s.size; xSlider.value = s.x; ySlider.value = s.y; lsSlider.value = s.ls;
+    glowSlider.value = s.glowAmt; colorPick.value = s.color; glowPick.value = s.glow;
+    resetBtn.hidden = !s.builtin;
+    deleteBtn.hidden = !!s.builtin;
+    applyStageImages();
+    renderStage();
+    renderRules();
+  }
+
+  function markDirty(key){
+    const was = dirty.has(key);
+    dirty.add(key);
+    statusOverride = null;
+    if (!was) refreshCard(key);
+    updateSaveBar();
+  }
+
+  // стиль: слайдеры, цвета, шрифт
+  function styleChange(mut){
+    mut(cur());
+    renderStage();
+    updateActiveMini();
+    markDirty(activeKey);
+  }
+  sizeSlider.addEventListener('input', () => styleChange(s => { s.size = parseFloat(sizeSlider.value); }));
+  xSlider.addEventListener('input', () => styleChange(s => { s.x = parseFloat(xSlider.value); }));
+  ySlider.addEventListener('input', () => styleChange(s => { s.y = parseFloat(ySlider.value); }));
+  lsSlider.addEventListener('input', () => styleChange(s => { s.ls = parseFloat(lsSlider.value); }));
+  glowSlider.addEventListener('input', () => styleChange(s => { s.glowAmt = parseFloat(glowSlider.value); }));
+  colorPick.addEventListener('input', () => styleChange(s => { s.color = colorPick.value; }));
+  glowPick.addEventListener('input', () => styleChange(s => { s.glow = glowPick.value; }));
+  function pickFont(value, weight){
+    styleChange(s => { s.font = value; s.weight = weight; });
+    fontMsg.textContent = '';
+    markActiveFont();
+  }
+  previewText.addEventListener('input', () => {
+    renderStage();
+    feed.querySelectorAll('.mDigits').forEach(d => { d.textContent = previewText.value || '28:41'; });
+  });
+
+  // поля, которые меняют карточку
+  function metaChange(mut){
+    mut(cur());
+    markDirty(activeKey);
+    refreshCard(activeKey);
+    renderRules();
+    $('editorTitle').textContent = 'Настройка: ' + (cur().label || 'без названия');
+  }
+  function numOrNull(v){ if (v === '' || v == null) return null; const n = Math.round(Number(v)); return isFinite(n) && n > 0 ? n : null; }
+  skinName.addEventListener('input', () => metaChange(s => { s.label = skinName.value; }));
+  skinCode.addEventListener('input', () => metaChange(s => { s.code = skinCode.value.trim().replace(/\s+/g, ''); }));
+  twitchCategory.addEventListener('input', () => metaChange(s => { s.twitchCategory = twitchCategory.value; }));
+  useCategory.addEventListener('change', () => metaChange(s => { s.useCategory = useCategory.checked; }));
+  buyable.addEventListener('change', () => metaChange(s => { s.buyable = buyable.checked; }));
+  priceRub.addEventListener('input', () => metaChange(s => { s.priceRub = numOrNull(priceRub.value); }));
+  pointsTier.addEventListener('change', () => metaChange(s => { s.pointsTier = pointsTier.value || null; }));
+  function tierCost(id){
+    if (!id) return null;
+    const t = (draftSettings.pointTiers || []).find(x => x.id === id);
+    return t && t.cost ? t.cost : null;
+  }
+  function fillTierSelect(val){
+    pointsTier.innerHTML = '';
+    const none = document.createElement('option'); none.value = ''; none.textContent = 'нельзя'; pointsTier.appendChild(none);
+    (draftSettings.pointTiers || []).forEach(t => {
+      if (!t.cost) return;
+      const o = document.createElement('option'); o.value = t.id; o.textContent = (t.name || 'Уровень') + ' — ' + fmt(t.cost);
+      pointsTier.appendChild(o);
+    });
+    pointsTier.value = val && [...pointsTier.options].some(o => o.value === val) ? val : '';
+  }
+  isDefault.addEventListener('change', () => {
+    const on = isDefault.checked;
+    if (on) {
+      orderedKeys().forEach(k => {
+        if (k !== activeKey && drafts[k].isDefault) { drafts[k].isDefault = false; markDirty(k); refreshCard(k); }
+      });
+    }
+    metaChange(s => { s.isDefault = on; });
+  });
+
+  // ── картинки ──
+  function dataUrlToBlob(d){
+    const parts = d.split(',');
+    const type = (parts[0].match(/data:([^;]+)/) || [])[1] || 'image/png';
+    const bin = atob(parts[1]);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type });
+  }
+
+  function readImage(file){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject('Не получилось прочитать файл.');
+      reader.onload = () => {
+        const im = new Image();
+        im.onerror = () => reject('Это не похоже на картинку.');
+        im.onload = () => {
+          const w = im.naturalWidth, h = im.naturalHeight;
+          const okType = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].indexOf(file.type) !== -1;
+          if (w <= MAX_W && okType) { resolve({ blob: file, dataUrl: reader.result, w, h }); return; }
+          const scale = Math.min(1, MAX_W / w);
+          const cw = Math.round(w * scale), ch = Math.round(h * scale);
+          const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+          c.getContext('2d').drawImage(im, 0, 0, cw, ch);
+          const dataUrl = c.toDataURL('image/png');
+          resolve({ blob: dataUrlToBlob(dataUrl), dataUrl, w: cw, h: ch });
+        };
+        im.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function stackChanged(key){
+    markDirty(key);
+    refreshCard(key);
+    if (key === activeKey) { applyStageImages(); renderStage(); renderRules(); }
+  }
+
+  function moveLayer(i, dir){
+    const st = cur().stack, j = i + dir;
+    if (j < 0 || j >= st.length) return;
+    const t = st[i]; st[i] = st[j]; st[j] = t;
+    layerMsg.textContent = '';
+    stackChanged(activeKey);
+  }
+
+  function removeLayer(i){
+    const st = cur().stack;
+    if (!st[i] || st[i].digits) return;
+    st.splice(i, 1);
+    layerMsg.textContent = '';
+    stackChanged(activeKey);
+  }
+
+  // opts: {at:'bottom'|'top'} или {replace: элемент слоя}
+  async function handleFile(input, opts){
+    const file = input.files[0];
+    input.value = '';
+    if (!file) return;
+    const key = activeKey;
+    if (!opts.replace && imageCount(drafts[key]) >= MAX_IMAGES) { layerMsg.textContent = 'Больше ' + MAX_IMAGES + ' картинок в одном скине не влезет.'; return; }
+    layerMsg.textContent = 'Загружаю картинку…';
+    let img;
+    try { img = await readImage(file); }
+    catch (msg) { layerMsg.textContent = String(msg); return; }
+    let ref = img.dataUrl;
+    try { ref = await uploadImage(img.blob); }
+    catch (e) { /* останется в черновике, попробую ещё раз при сохранении */ }
+    const s = drafts[key]; if (!s) return;
+    let item;
+    const idx = opts.replace ? s.stack.indexOf(opts.replace) : -1;
+    if (idx !== -1) { s.stack[idx].img = ref; item = s.stack[idx]; }
+    else { item = { img: ref }; if (opts.at === 'bottom') s.stack.unshift(item); else s.stack.push(item); }
+    // размер холста задаёт самая нижняя картинка
+    if (s.stack.find(x => x.img) === item) { s.w = img.w; s.h = img.h; }
+    layerMsg.textContent = '';
+    stackChanged(key);
+  }
+  addBackFile.addEventListener('change', () => handleFile(addBackFile, { at: 'bottom' }));
+  addFrontFile.addEventListener('change', () => handleFile(addFrontFile, { at: 'top' }));
+
+  // ── добавить / сбросить / удалить ──
+  function addSkin(){
+    const key = newKey();
+    drafts[key] = newCustom(key, 'Новый скин');
+    if (filter === 'category') { filter = 'all'; syncChips(); }
+    markDirty(key);
+    renderFeed();
+    selectSkin(key);
+    $('editorSec').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => { skinName.focus(); skinName.select(); }, 350);
+  }
+
+  resetBtn.addEventListener('click', () => {
+    const b = BUILTIN.find(x => x.key === activeKey); if (!b) return;
+    const keepDefault = drafts[activeKey].isDefault;
+    drafts[activeKey] = defaultOf(b);
+    if (!keepDefault && drafts[activeKey].isDefault && orderedKeys().some(k => k !== activeKey && drafts[k].isDefault)) drafts[activeKey].isDefault = false;
+    markDirty(activeKey);
+    refreshCard(activeKey);
+    selectSkin(activeKey);
+  });
+
+  deleteBtn.addEventListener('click', () => {
+    const s = cur(); if (!s || s.builtin) return;
+    if (!confirm('Удалить скин «' + (s.label || 'без названия') + '»? Он пропадёт после «Сохранить».')) return;
+    const key = activeKey;
+    delete drafts[key];
+    if (saved[key]) { removed.add(key); dirty.add(key); } else { dirty.delete(key); }
+    renderFeed();
+    selectSkin(orderedKeys()[0]);
+    updateSaveBar();
+  });
+
+  // ── фильтры ──
+  function syncChips(){ document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.f === filter)); }
+  document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => { filter = c.dataset.f; syncChips(); renderFeed(); }));
+
+  // ── правила донатона ──
+  function getPath(obj, path){ return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj); }
+  function setPath(obj, path, val){
+    const ks = path.split('.'); let o = obj;
+    for (let i = 0; i < ks.length - 1; i++) { if (o[ks[i]] == null) o[ks[i]] = {}; o = o[ks[i]]; }
+    o[ks[ks.length - 1]] = val;
+  }
+  function fillSettingsUI(){
+    document.querySelectorAll('[data-s]').forEach(el => {
+      const v = getPath(draftSettings, el.dataset.s);
+      if (el.type === 'checkbox') el.checked = !!v;
+      else if (el.type === 'radio') el.checked = (el.value === v);
+      else el.value = v == null ? '' : v;
+    });
+    renderSteps();
+    refreshRulesView();
+  }
+  function settingsChanged(){
+    settingsDirty = true; statusOverride = null;
+    refreshRulesView(); updateSaveBar();
+  }
+  document.querySelectorAll('[data-s]').forEach(el => {
+    const ev = (el.type === 'checkbox' || el.type === 'radio') ? 'change' : 'input';
+    el.addEventListener(ev, () => {
+      let v;
+      if (el.type === 'checkbox') v = el.checked;
+      else if (el.type === 'radio') { if (!el.checked) return; v = el.value; }
+      else if (el.type === 'number') { v = el.value === '' ? null : Number(el.value); if (v != null && !isFinite(v)) v = null; }
+      else v = el.value;
+      setPath(draftSettings, el.dataset.s, v);
+      if (el.dataset.s.indexOf('pointTiers') === 0) { fillTierSelect(cur().pointsTier); renderFeed(); renderRules(); }
+      settingsChanged();
+    });
+  });
+  function renderSteps(){
+    const box = $('stepsBox'); box.innerHTML = '';
+    if (!Array.isArray(draftSettings.donations.steps)) draftSettings.donations.steps = [];
+    const steps = draftSettings.donations.steps;
+    const head = document.createElement('div'); head.className = 'stepRow stepHead';
+    head.innerHTML = '<span>Донат от, ₽</span><span>Секунд за 1 ₽</span><span></span>';
+    box.appendChild(head);
+    steps.forEach((st, i) => {
+      const row = document.createElement('div'); row.className = 'stepRow';
+      const a = document.createElement('input'); a.type = 'number'; a.min = '0'; a.step = '1'; a.value = st.from;
+      const b = document.createElement('input'); b.type = 'number'; b.min = '0'; b.step = '0.1'; b.value = st.secPerRub;
+      a.addEventListener('input', () => { st.from = Number(a.value) || 0; settingsChanged(); });
+      b.addEventListener('input', () => { st.secPerRub = Number(b.value) || 0; settingsChanged(); });
+      row.appendChild(a); row.appendChild(b);
+      row.appendChild(iconBtn('✕', 'Убрать ступень', steps.length <= 1, () => { steps.splice(i, 1); renderSteps(); settingsChanged(); }, 'del'));
+      box.appendChild(row);
+    });
+    const add = document.createElement('button'); add.type = 'button'; add.className = 'btn'; add.textContent = '+ ступень';
+    add.addEventListener('click', () => {
+      const last = steps[steps.length - 1] || { from: 0, secPerRub: 0.6 };
+      steps.push({ from: (last.from || 0) + 500, secPerRub: last.secPerRub });
+      renderSteps(); settingsChanged();
+    });
+    box.appendChild(add);
+  }
+  // Сколько секунд даёт донат. Ступени работают как налоговые: каждая часть суммы
+  // считается по своей ставке (первые 100 ₽ по первой, следующие — по второй и т.д.)
+  function donationSeconds(amount, s){
+    const d = s.donations;
+    if (!d.on || !(amount > 0)) return 0;
+    if (d.stepsOn && d.steps && d.steps.length) {
+      const st = d.steps.slice().sort((x, y) => x.from - y.from);
+      let sec = 0;
+      for (let i = 0; i < st.length; i++) {
+        const lo = i === 0 ? 0 : st[i].from;
+        const hi = i + 1 < st.length ? st[i + 1].from : Infinity;
+        if (amount > lo) sec += (Math.min(amount, hi) - lo) * (st[i].secPerRub || 0);
+      }
+      return Math.round(sec);
+    }
+    return Math.round(amount / (d.rubPerMinute || 100) * 60);
+  }
+  function fmtDur(sec){
+    const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), r = sec % 60;
+    return [h ? h + ' ч' : '', m ? m + ' мин' : '', r ? r + ' сек' : ''].filter(Boolean).join(' ') || '0 сек';
+  }
+  function refreshRulesView(){
+    document.querySelectorAll('.ruleCard[data-card]').forEach(c => c.classList.toggle('off', !getPath(draftSettings, c.dataset.card)));
+    const d = draftSettings.donations;
+    $('rubRow').hidden = !!d.stepsOn;
+    $('stepsBox').hidden = !d.stepsOn;
+    $('stepsHint').hidden = !d.stepsOn;
+    $('capRow').hidden = !draftSettings.capOn;
+    $('donExample').textContent = d.on
+      ? 'Пример: ' + [100, 300, 1000, 2000].map(a => a + ' ₽ → ' + fmtDur(donationSeconds(a, draftSettings))).join(' · ')
+      : '';
+  }
+
+
+  // ── перетаскивание цифр ──
+  let dragging = false;
+  digitsEl.addEventListener('pointerdown', e => { dragging = true; digitsEl.setPointerCapture(e.pointerId); });
+  digitsEl.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const r = stageWrap.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100));
+    const y = Math.max(0, Math.min(100, (e.clientY - r.top) / r.height * 100));
+    styleChange(s => { s.x = Math.round(x * 10) / 10; s.y = Math.round(y * 10) / 10; });
+    xSlider.value = cur().x; ySlider.value = cur().y;
+  });
+  digitsEl.addEventListener('pointerup', () => { dragging = false; });
+  digitsEl.addEventListener('pointercancel', () => { dragging = false; });
+
+  // ── панель сохранения ──
+  function pendingCount(){ return dirty.size + (settingsDirty ? 1 : 0); }
+  function updateSaveBar(){
+    const n = pendingCount();
+    saveStatus.className = '';
+    if (saving) { saveStatus.textContent = 'Сохраняю…'; saveBtn.disabled = true; discardBtn.hidden = true; return; }
+    if (statusOverride) { saveStatus.className = statusOverride.cls; saveStatus.textContent = statusOverride.text; }
+    else if (mode === 'loading') { saveStatus.textContent = 'Загружаю сохранённое…'; }
+    else if (n) { saveStatus.className = 'dirty'; saveStatus.textContent = 'Есть несохранённые изменения'; }
+    else { saveStatus.textContent = 'Всё сохранено на сайте — видно с любого устройства'; }
+    saveBtn.disabled = !n || mode === 'loading';
+    discardBtn.hidden = !n;
+  }
+
+  function explain(e){
+    const msg = String((e && (e.message || e.error_description || e.code)) || '');
+    if (/payload too large|maximum allowed size|too large/i.test(msg)) return 'Картинка слишком большая — возьми поменьше.';
+    if (/row-level security|permission|not allowed|JWT|401|403/i.test(msg)) return 'Нет прав на сохранение — выйди и войди снова через Twitch.';
+    if (/fetch|network|Failed to/i.test(msg)) return 'Нет связи с сервером — проверь интернет и нажми «Сохранить» ещё раз.';
+    return 'Не получилось сохранить — попробуй ещё раз.' + (msg ? ' (' + msg + ')' : '');
+  }
+
+  function randId(){
+    return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
+  async function uploadImage(blob){
+    if (!streamer) throw new Error('not signed in');
+    const type = blob.type || 'image/png';
+    const ext = type === 'image/jpeg' ? 'jpg' : type === 'image/webp' ? 'webp' : type === 'image/gif' ? 'gif' : 'png';
+    const path = streamer.id + '/' + randId() + '.' + ext;
+    const up = await sb.storage.from('skins').upload(path, blob, { contentType: type, upsert: false });
+    if (up.error) throw up.error;
+    return 'sb:skins/' + path;
+  }
+
+  async function saveAll(){
+    if (saving || !pendingCount() || !streamer) return;
+    saving = true; statusOverride = null; updateSaveBar();
+    try {
+      const del = Array.from(dirty).filter(k => removed.has(k));
+      if (del.length) {
+        const r = await sb.from('skins').delete().eq('streamer_id', streamer.id).in('key', del);
+        if (r.error) throw r.error;
+        del.forEach(k => { delete saved[k]; removed.delete(k); dirty.delete(k); });
+      }
+      const rows = [];
+      for (const key of Array.from(dirty)) {
+        const s = drafts[key];
+        if (!s) { dirty.delete(key); continue; }
+        for (const it of s.stack) {
+          if (it.img && it.img.indexOf('data:') === 0) it.img = await uploadImage(dataUrlToBlob(it.img));
+        }
+        const doc = {}; FIELDS.forEach(f => { doc[f] = s[f] === undefined ? null : s[f]; });
+        rows.push({ streamer_id: streamer.id, key, data: doc, updated_at: new Date().toISOString() });
+      }
+      if (rows.length) {
+        const r = await sb.from('skins').upsert(rows, { onConflict: 'streamer_id,key' });
+        if (r.error) throw r.error;
+        rows.forEach(row => { saved[row.key] = clone(drafts[row.key]); dirty.delete(row.key); });
+      }
+      if (settingsDirty || needMigratedFlag) {
+        const next = Object.assign({}, clone(draftSettings), { migrated: true });
+        const r = await sb.from('streamers').update({ settings: next }).eq('id', streamer.id);
+        if (r.error) throw r.error;
+        streamer.settings = next;
+        savedSettings = clone(draftSettings); settingsDirty = false; needMigratedFlag = false;
+      }
+      $('migrateBanner').hidden = true;
+      const t = new Date();
+      statusOverride = { cls: 'ok', text: 'Сохранено в ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ' — магазин и все устройства уже видят изменения' };
+    } catch (e) {
+      statusOverride = { cls: 'err', text: explain(e) };
+    }
+    saving = false;
+    renderFeed();
+    selectSkin(activeKey);
+    updateSaveBar();
+  }
+  saveBtn.addEventListener('click', saveAll);
+
+  discardBtn.addEventListener('click', () => {
+    if (!confirm('Отменить все несохранённые изменения?')) return;
+    dirty.forEach(k => { if (saved[k]) drafts[k] = clone(saved[k]); else delete drafts[k]; });
+    dirty.clear(); removed.clear();
+    draftSettings = clone(savedSettings); settingsDirty = false;
+    if (needMigratedFlag) { needMigratedFlag = false; $('migrateBanner').hidden = true; }
+    statusOverride = null;
+    fillSettingsUI();
+    renderFeed(); selectSkin(activeKey); updateSaveBar();
+  });
+
+  window.addEventListener('beforeunload', e => {
+    if (pendingCount()) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  // ── данные с сервера ──
+  function applyRemoteSkins(remote){
+    const next = builtinDefaults();
+    Object.keys(remote).forEach(k => {
+      const b = BUILTIN.find(x => x.key === k);
+      if (b) { next[k] = normalize(remote[k], defaultOf(b)); next[k].builtin = true; next[k].key = k; }
+      else { next[k] = normalize(remote[k], newCustom(k, 'Скин')); next[k].builtin = false; next[k].key = k; }
+    });
+    saved = next;
+    Object.keys(next).forEach(k => { if (!dirty.has(k)) drafts[k] = clone(next[k]); });
+    Object.keys(drafts).forEach(k => { if (!next[k] && !dirty.has(k)) delete drafts[k]; });
+  }
+
+  // Перенос скинов из старого конструктора (один раз, пока на сайте пусто)
+  async function loadLegacyImport(){
+    try {
+      const r = await fetch('import/legacy-skins.json', { cache: 'no-store' });
+      if (!r.ok) return false;
+      const j = await r.json();
+      Object.keys(j.skins || {}).forEach(k => {
+        const src = j.skins[k];
+        const b = BUILTIN.find(x => x.key === k);
+        const base = b ? defaultOf(b) : newCustom(k, src.label || 'Скин');
+        const s = normalize(src, base); s.key = k; s.builtin = !!b;
+        drafts[k] = s; dirty.add(k);
+      });
+      if (j.settings) { draftSettings = normalizeSettings(Object.assign({}, draftSettings, j.settings)); settingsDirty = true; }
+      needMigratedFlag = true;
+      $('migrateBanner').hidden = false;
+      return true;
+    } catch (e) { return false; }
+  }
+
+  async function loadAll(first){
+    const res = await Promise.all([
+      sb.from('skins').select('key,data').eq('streamer_id', streamer.id),
+      sb.from('fonts').select('*').eq('streamer_id', streamer.id),
+      sb.from('streamers').select('*').eq('id', streamer.id).maybeSingle()
+    ]);
+    const sk = res[0], fo = res[1], st = res[2];
+    if (sk.error) throw sk.error;
+    if (st.data) streamer = st.data;
+    const remote = {};
+    (sk.data || []).forEach(r => { remote[r.key] = r.data; });
+    applyRemoteSkins(remote);
+    if (!fo.error) setCustomFonts((fo.data || []).map(f => ({ id: f.id, name: f.name, family: f.family, ref: 'sb:fonts/' + f.path, type: f.type, order: f.sort })));
+    savedSettings = normalizeSettings(streamer.settings);
+    if (!settingsDirty) draftSettings = clone(savedSettings);
+    if (first && !(sk.data || []).length && !(streamer.settings && streamer.settings.migrated)) await loadLegacyImport();
+    fillSettingsUI();
+    renderFeed();
+    selectSkin(activeKey);
+    updateSaveBar();
+  }
+
+  // ── вход через Twitch ──
+  const gate = $('gate'), gateText = $('gateText'), loginBtn = $('loginBtn');
+  function showGate(kind, who){
+    gate.hidden = false;
+    loginBtn.hidden = kind !== 'login';
+    $('logoutBtn2').hidden = kind !== 'denied';
+    if (kind === 'login') gateText.textContent = 'Этот раздел только для владельца канала. Войди через Twitch, чтобы открыть свой конструктор.';
+    else if (kind === 'denied') gateText.textContent = 'Ты вошёл(-ла) как ' + who + '. У этого аккаунта нет доступа к конструктору — он только для владельца канала.';
+    else gateText.textContent = 'Не получилось связаться с сервером. Обнови страницу через минуту.';
+  }
+  loginBtn.addEventListener('click', async () => {
+    loginBtn.disabled = true;
+    gateText.textContent = 'Перекидываю на Twitch…';
+    const r = await sb.auth.signInWithOAuth({ provider: 'twitch', options: { redirectTo: location.origin + location.pathname } });
+    if (r.error) { loginBtn.disabled = false; gateText.textContent = 'Не получилось начать вход: ' + r.error.message; }
+  });
+  async function logout(){ try { await sb.auth.signOut(); } catch (e) {} location.reload(); }
+  $('logoutBtn').addEventListener('click', logout);
+  $('logoutBtn2').addEventListener('click', logout);
+
+  async function initStore(){
+    let session = null;
+    try { session = (await sb.auth.getSession()).data.session; } catch (e) { session = null; }
+    if (!session) { showGate('login'); return; }
+    const meta = session.user.user_metadata || {};
+    const who = meta.nickname || meta.name || meta.full_name || 'Twitch';
+    $('meName').textContent = who;
+    const ava = meta.avatar_url || meta.picture;
+    if (ava) { $('meAvatar').src = ava; $('meAvatar').hidden = false; }
+    const r = await sb.rpc('claim_streamer');
+    if (r.error) { showGate('error'); return; }
+    if (!r.data || !r.data.id) { showGate('denied', who); return; }
+    streamer = r.data;
+    gate.hidden = true;
+    mode = 'cloud';
+    try { await loadAll(true); }
+    catch (e) { statusOverride = { cls: 'err', text: explain(e) }; updateSaveBar(); }
+  }
+
+  // Вернулась на вкладку — подтянуть изменения с других устройств (если нет своих несохранённых)
+  window.addEventListener('focus', () => {
+    if (streamer && !pendingCount() && !saving) loadAll(false).catch(() => {});
+  });
+
+  // первый показ
+  fillSettingsUI();
+  renderFeed();
+  selectSkin(activeKey);
+  updateSaveBar();
+  initStore();
+
+})();
+</script>
+</body>
+</html>

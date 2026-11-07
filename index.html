@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Скины таймера — магазин</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Выбери вид таймера донатона и включи его на стриме донатом или баллами канала.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Playfair+Display:wght@600;700&family=Cinzel:wght@600;700&family=Press+Start+2P&family=Baloo+2:wght@700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="js/config.js"></script>
+<script src="js/supabase.js"></script>
+<script src="js/fonts-extra.js"></script>
+<style>
+  :root {
+    --bg: #121016; --panel: #1b1822; --panel-2: #242030; --panel-3: #2c2838; --line: #38334a;
+    --text: #f1ecf7; --text-dim: #a89dbd; --accent: #ff5fa8; --accent-soft: rgba(255,95,168,.18);
+    --accent-2: #7fd67a; --accent-2-soft: rgba(127,214,122,.15); --blue: #9cc8ff; --blue-soft: rgba(111,179,255,.15);
+    --canvas: #0c0a10; --checker: #17141d; --twitch: #9146ff;
+    --mono: 'JetBrains Mono', ui-monospace, monospace; --ui: 'Manrope', 'Segoe UI', sans-serif;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); font-family: var(--ui); margin: 0; }
+  body { padding: 0 16px 60px; display: flex; flex-direction: column; align-items: center; }
+  a { color: var(--blue); }
+  #page { width: 100%; max-width: 1180px; display: flex; flex-direction: column; gap: 24px; }
+
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0 4px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; }
+  .brand img { width: 34px; height: 34px; border-radius: 50%; }
+  .user { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-dim); }
+  .user img { width: 30px; height: 30px; border-radius: 50%; }
+  .btn { appearance: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+    font: 700 13px var(--ui); padding: 9px 14px; border-radius: 10px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.twitch { background: var(--twitch); border-color: var(--twitch); color: #fff; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #2a0f1c; font-weight: 800; }
+  .linkBtn { background: none; border: none; color: var(--text-dim); text-decoration: underline; cursor: pointer; font: inherit; }
+
+  .hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 20px; align-items: center; }
+  @media (max-width: 760px) { .hero { grid-template-columns: 1fr; } }
+  .hero h1 { margin: 0 0 8px; font-size: clamp(26px, 5vw, 38px); line-height: 1.1; letter-spacing: -.02em; }
+  .hero p { margin: 0; color: var(--text-dim); font-size: 15px; line-height: 1.55; max-width: 56ch; }
+  .howto { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .howto h2 { margin: 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); }
+  .step { display: flex; gap: 10px; font-size: 14px; line-height: 1.45; }
+  .step b { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 12px; }
+
+  .secHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .secHead h2 { margin: 0; font-size: 20px; font-weight: 800; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { appearance: none; border: 1px solid var(--line); background: var(--panel); color: var(--text-dim);
+    font: 700 12.5px var(--ui); padding: 7px 13px; border-radius: 999px; cursor: pointer; }
+  .chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+  #feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+  @media (max-width: 520px) { #feed { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+  .card { background: var(--panel); border: 2px solid transparent; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column;
+    cursor: pointer; transition: border-color .15s, transform .15s; text-align: left; font: inherit; color: inherit; padding: 0; }
+  .card:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .thumb { position: relative; aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; overflow: hidden;
+    background: linear-gradient(135deg, var(--checker) 25%, transparent 25%) -8px 0/16px 16px, linear-gradient(135deg, transparent 75%, var(--checker) 75%) -8px 0/16px 16px,
+      linear-gradient(135deg, var(--checker) 25%, transparent 25%) 0 8px/16px 16px, linear-gradient(135deg, transparent 75%, var(--checker) 75%) 0 8px/16px 16px, var(--canvas); }
+  .mini { position: relative; width: 100%; container-type: inline-size; }
+  .mini img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+  .mDigits { position: absolute; white-space: nowrap; line-height: 1; transform: translate(-50%, -50%); font-variant-numeric: tabular-nums; pointer-events: none; }
+  .sticker { position: absolute; top: 8px; left: 8px; z-index: 20; font: 800 10px var(--ui); letter-spacing: .04em; padding: 4px 7px; border-radius: 6px; text-transform: uppercase; }
+  .sticker.buy { background: var(--accent); color: #2a0f1c; }
+  .sticker.cat { background: var(--accent-2); color: #0e2a0c; }
+  .cardBody { padding: 10px 12px 13px; display: flex; flex-direction: column; gap: 5px; }
+  .price { font-size: 20px; font-weight: 800; line-height: 1.15; }
+  .price small { font-size: 12px; font-weight: 700; color: var(--text-dim); }
+  .price.free { color: var(--accent-2); font-size: 15px; }
+  .ctitle { font-size: 13.5px; line-height: 1.35; }
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; }
+  .badge { font: 700 10.5px var(--ui); padding: 3px 7px; border-radius: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .b-cat { background: var(--accent-2-soft); color: var(--accent-2); }
+  .b-code { background: var(--panel-3); color: var(--text-dim); font-family: var(--mono); font-weight: 600; }
+  .empty { grid-column: 1 / -1; color: var(--text-dim); padding: 20px 4px; font-size: 14px; }
+
+  /* ── окно покупки ── */
+  #modal { position: fixed; inset: 0; z-index: 50; background: rgba(8,6,12,.78); display: flex; align-items: flex-start; justify-content: center; padding: 24px 12px; overflow-y: auto; }
+  #sheet { width: 100%; max-width: 640px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 14px; position: relative; }
+  #closeModal { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font-size: 18px; cursor: pointer; }
+  #sheet h2 { margin: 0; font-size: 20px; padding-right: 40px; }
+  .bigStage { border-radius: 12px; overflow: hidden; background: var(--canvas); }
+  .way { background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .way h3 { margin: 0; font-size: 15px; }
+  .way p { margin: 0; color: var(--text-dim); font-size: 13.5px; line-height: 1.5; }
+  textarea { width: 100%; min-height: 70px; resize: vertical; background: var(--panel-3); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 10px; font: 500 14px var(--ui); }
+  .msgBox { background: var(--canvas); border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; font: 600 14px var(--mono); word-break: break-word; color: #d8f5c8; }
+  .check { display: flex; gap: 9px; align-items: flex-start; font-size: 14px; cursor: pointer; line-height: 1.4; }
+  .check input { width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--accent); flex-shrink: 0; }
+  .note { font-size: 12.5px; color: var(--accent-2); min-height: 1em; }
+  .bigPrice { font-size: 26px; font-weight: 800; }
+  .muted { color: var(--text-dim); }
+  footer { color: var(--text-dim); font-size: 12px; text-align: center; padding-top: 10px; }
+  .state { color: var(--text-dim); padding: 40px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div id="page">
+  <div class="top">
+    <div class="brand"><img id="brandAva" alt="" hidden><span id="brandName">Скины таймера</span></div>
+    <div class="user">
+      <button class="btn twitch" id="loginBtn" hidden>Войти через Twitch</button>
+      <img id="meAva" alt="" hidden><span id="meName"></span>
+      <a class="btn" id="adminLink" href="admin.html" hidden>Конструктор</a>
+      <button class="linkBtn" id="logoutBtn" hidden>Выйти</button>
+    </div>
+  </div>
+
+  <section class="hero">
+    <div>
+      <h1>Поменяй вид таймера на стриме</h1>
+      <p>Выбери скин — и таймер донатона на экране сразу сменится на него. Можно задонатить с кодом скина или взять награду за баллы канала.</p>
+    </div>
+    <div class="howto">
+      <h2>Как купить</h2>
+      <div class="step"><b>1</b><span>Нажми на скин, который нравится.</span></div>
+      <div class="step"><b>2</b><span>Допиши свой комментарий, если хочешь, — сообщение с кодом соберётся само.</span></div>
+      <div class="step"><b>3</b><span>Задонать от указанной суммы с этим сообщением — таймер сменит вид прямо на стриме.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="secHead">
+      <h2>Скины</h2>
+      <div class="chips">
+        <button class="chip active" data-f="buy">Можно купить</button>
+        <button class="chip" data-f="all">Все скины</button>
+      </div>
+    </div>
+    <div style="height:14px"></div>
+    <div id="feed"><div class="state">Загружаю скины…</div></div>
+  </section>
+
+  <footer>Таймер и скины — для канала <a id="twitchLink" href="https://twitch.tv/" target="_blank" rel="noopener"></a></footer>
+</div>
+
+<div id="modal" hidden>
+  <div id="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <button id="closeModal" aria-label="Закрыть">×</button>
+    <h2 id="mTitle"></h2>
+    <div class="bigStage" id="mStage"></div>
+    <div id="mInfo" class="muted"></div>
+
+    <div class="way" id="wayDon">
+      <h3>Донатом</h3>
+      <div class="bigPrice" id="mPrice"></div>
+      <label for="mComment" class="muted" style="font-size:13px">Твой комментарий (необязательно)</label>
+      <textarea id="mComment" maxlength="250" placeholder="Например: держись, болото!"></textarea>
+      <label class="check" id="mTimeRow"><input type="checkbox" id="mTime"> Засчитать донат ещё и в таймер (добавит минуты)</label>
+      <div class="muted" style="font-size:13px">Сообщение для доната — вставь его целиком:</div>
+      <div class="msgBox" id="mMsg"></div>
+      <button class="btn primary" id="mGo">Скопировать сообщение и перейти к донату</button>
+      <div class="note" id="mNote"></div>
+    </div>
+
+    <div class="way" id="wayPts">
+      <h3>Баллами канала</h3>
+      <p id="mPts"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const CFG = window.SITE_CONFIG;
+  const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey);
+  const $ = id => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  const login = (params.get('s') || CFG.defaultStreamer).toLowerCase();
+  const BUILTIN_IMG = { swamp: 'assets/skins/swamp.png', cult: 'assets/skins/cult.png', vending: 'assets/skins/vending.png', jackbox: 'assets/skins/jackbox.png' };
+  let streamer = null, skins = [], settings = {}, filter = 'buy', current = null;
+
+  function fmt(n){ return Number(n).toLocaleString('ru-RU'); }
+  function refUrl(ref, key){
+    if (!ref) return '';
+    if (ref === 'builtin') return BUILTIN_IMG[key] || '';
+    if (ref.indexOf('sb:') === 0) return CFG.supabaseUrl + '/storage/v1/object/public/' + ref.slice(3);
+    if (ref.indexOf('data:') === 0 || ref.indexOf('assets/') === 0) return ref;
+    return '';
+  }
+  function styleDigits(el, s){
+    el.style.left = s.x + '%'; el.style.top = s.y + '%';
+    el.style.fontFamily = s.font; el.style.fontWeight = s.weight;
+    el.style.fontSize = s.size + 'cqw'; el.style.letterSpacing = (s.ls / 7) + 'cqw'; el.style.color = s.color;
+    const g = s.glowAmt / 7;
+    el.style.textShadow = '0 0 0.45cqw #000, 0 0.3cqw 0.9cqw rgba(0,0,0,.7), 0 0 ' + (g * 0.5) + 'cqw ' + s.glow + ', 0 0 ' + g + 'cqw ' + s.glow;
+  }
+  function stackOf(s){
+    if (Array.isArray(s.stack)) return s.stack;
+    const st = []; if (s.back) st.push({ img: s.back }); st.push({ digits: true }); if (s.front) st.push({ img: s.front }); return st;
+  }
+  function buildMini(s){
+    const mini = document.createElement('div'); mini.className = 'mini';
+    mini.style.aspectRatio = (s.w || 1774) + ' / ' + (s.h || 887);
+    stackOf(s).forEach((it, idx) => {
+      if (it.digits) {
+        const d = document.createElement('div'); d.className = 'mDigits'; d.textContent = '28:41';
+        styleDigits(d, s); d.style.zIndex = idx + 1; mini.appendChild(d); return;
+      }
+      const u = refUrl(it.img, s.key); if (!u) return;
+      const i = new Image(); i.alt = ''; i.src = u; i.loading = 'lazy'; i.style.zIndex = idx + 1; mini.appendChild(i);
+    });
+    return mini;
+  }
+  function tier(id){ return (settings.pointTiers || []).find(t => t.id === id && t.cost) || null; }
+  function canBuy(s){ return s.buyable && s.code && (s.priceRub || tier(s.pointsTier)); }
+
+  function buildCard(s){
+    const card = document.createElement('button'); card.type = 'button'; card.className = 'card';
+    const thumb = document.createElement('div'); thumb.className = 'thumb';
+    thumb.appendChild(buildMini(s));
+    const st = document.createElement('span');
+    if (canBuy(s)) { st.className = 'sticker buy'; st.textContent = 'Купить'; thumb.appendChild(st); }
+    else if (s.useCategory) { st.className = 'sticker cat'; st.textContent = 'Авто'; thumb.appendChild(st); }
+    card.appendChild(thumb);
+    const body = document.createElement('div'); body.className = 'cardBody';
+    const price = document.createElement('div'); price.className = 'price';
+    const t = tier(s.pointsTier);
+    if (canBuy(s)) {
+      if (s.priceRub) {
+        price.textContent = fmt(s.priceRub) + ' ₽';
+        if (t) { const sm = document.createElement('small'); sm.textContent = ' · ' + fmt(t.cost) + ' баллов'; price.appendChild(sm); }
+      } else price.textContent = fmt(t.cost) + ' баллов';
+    } else { price.className = 'price free'; price.textContent = s.useCategory ? 'Включается сам' : 'Не продаётся'; }
+    body.appendChild(price);
+    const ti = document.createElement('div'); ti.className = 'ctitle'; ti.textContent = s.label || 'Скин'; body.appendChild(ti);
+    const badges = document.createElement('div'); badges.className = 'badges';
+    if (s.useCategory && s.twitchCategory) { const b = document.createElement('span'); b.className = 'badge b-cat'; b.textContent = s.twitchCategory; badges.appendChild(b); }
+    if (canBuy(s)) { const b = document.createElement('span'); b.className = 'badge b-code'; b.textContent = '#' + s.code; badges.appendChild(b); }
+    if (badges.children.length) body.appendChild(badges);
+    card.appendChild(body);
+    card.addEventListener('click', () => openModal(s));
+    return card;
+  }
+
+  function renderFeed(){
+    const feed = $('feed'); feed.innerHTML = '';
+    const list = skins.filter(s => filter === 'all' ? true : canBuy(s));
+    if (!list.length) {
+      const e = document.createElement('div'); e.className = 'empty';
+      e.textContent = filter === 'buy' ? 'Пока ни один скин не продаётся — загляни позже или посмотри «Все скины».' : 'Скинов пока нет.';
+      feed.appendChild(e); return;
+    }
+    list.forEach(s => feed.appendChild(buildCard(s)));
+  }
+  document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    filter = c.dataset.f;
+    document.querySelectorAll('.chip').forEach(x => x.classList.toggle('active', x === c));
+    renderFeed();
+  }));
+
+  // ── окно покупки ──
+  function buildMessage(){
+    const s = current; if (!s) return '';
+    const mode = settings.skinPurchase || 'viewer_choice';
+    const withTime = mode === 'viewer_choice' && $('mTime').checked;
+    const comment = $('mComment').value.trim().replace(/\s+/g, ' ');
+    return '#' + s.code + (withTime ? ' +время' : '') + (comment ? ' ' + comment : '');
+  }
+  function refreshMsg(){ $('mMsg').textContent = buildMessage(); }
+  function openModal(s){
+    current = s;
+    $('mTitle').textContent = s.label || 'Скин';
+    const stage = $('mStage'); stage.innerHTML = ''; stage.appendChild(buildMini(s));
+    const buy = canBuy(s);
+    const mins = settings.boughtMinutes || 30;
+    $('mInfo').textContent = buy
+      ? 'После покупки таймер на стриме держит этот вид ' + mins + ' мин, потом возвращается к скину текущей игры.'
+      : (s.useCategory ? 'Этот скин включается сам, когда на стриме идёт ' + (s.twitchCategory || 'своя категория') + '. Купить его нельзя.' : 'Этот скин сейчас не продаётся.');
+    $('wayDon').hidden = !(buy && s.priceRub);
+    $('wayPts').hidden = !(buy && tier(s.pointsTier));
+    if (buy && s.priceRub) {
+      $('mPrice').textContent = 'от ' + fmt(s.priceRub) + ' ₽';
+      $('mComment').value = '';
+      const mode = settings.skinPurchase || 'viewer_choice';
+      $('mTimeRow').hidden = mode !== 'viewer_choice';
+      $('mTime').checked = false;
+      $('mNote').textContent = '';
+      refreshMsg();
+    }
+    const t = tier(s.pointsTier);
+    if (buy && t) $('mPts').innerHTML = '';
+    if (buy && t) {
+      const p = $('mPts');
+      p.append('На Twitch открой баллы канала → награда «', Object.assign(document.createElement('b'), { textContent: t.name }),
+        '» (' + fmt(t.cost) + ' баллов) → впиши код ', Object.assign(document.createElement('b'), { textContent: s.code }), '.');
+    }
+    $('modal').hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal(){ $('modal').hidden = true; document.body.style.overflow = ''; current = null; }
+  $('closeModal').addEventListener('click', closeModal);
+  $('modal').addEventListener('click', e => { if (e.target === $('modal')) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('modal').hidden) closeModal(); });
+  $('mComment').addEventListener('input', refreshMsg);
+  $('mTime').addEventListener('change', refreshMsg);
+  $('mGo').addEventListener('click', async () => {
+    const msg = buildMessage();
+    let copied = false;
+    try { await navigator.clipboard.writeText(msg); copied = true; } catch (e) {}
+    $('mNote').textContent = copied
+      ? 'Сообщение скопировано. На странице доната вставь его в поле сообщения и укажи сумму от ' + fmt(current.priceRub) + ' ₽.'
+      : 'Не получилось скопировать само — выдели сообщение выше и скопируй вручную.';
+    window.open(settings.donationUrl || CFG.defaultDonationUrl, '_blank', 'noopener');
+  });
+
+  // ── вход (для зрителей пригодится для заявок и чата, для владельца — ссылка в конструктор) ──
+  $('loginBtn').addEventListener('click', () => sb.auth.signInWithOAuth({ provider: 'twitch', options: { redirectTo: location.origin + location.pathname + location.search } }));
+  $('logoutBtn').addEventListener('click', async () => { try { await sb.auth.signOut(); } catch (e) {} location.reload(); });
+  async function initUser(){
+    let session = null;
+    try { session = (await sb.auth.getSession()).data.session; } catch (e) {}
+    if (!session) { $('loginBtn').hidden = false; return; }
+    const meta = session.user.user_metadata || {};
+    $('meName').textContent = meta.nickname || meta.name || 'Twitch';
+    const ava = meta.avatar_url || meta.picture; if (ava) { $('meAva').src = ava; $('meAva').hidden = false; }
+    $('logoutBtn').hidden = false;
+    if (streamer && streamer.owner === session.user.id) $('adminLink').hidden = false;
+  }
+
+  // ── загрузка витрины ──
+  async function load(){
+    const st = await sb.from('streamers').select('id,owner,twitch_login,display_name,settings').eq('twitch_login', login).maybeSingle();
+    if (st.error || !st.data) {
+      $('feed').innerHTML = '<div class="state">Магазин пока не открыт. Загляни позже.</div>';
+      return;
+    }
+    streamer = st.data;
+    settings = streamer.settings || {};
+    $('brandName').textContent = 'Скины таймера · ' + (streamer.display_name || streamer.twitch_login);
+    document.title = 'Скины таймера — ' + (streamer.display_name || streamer.twitch_login);
+    $('twitchLink').href = 'https://twitch.tv/' + streamer.twitch_login;
+    $('twitchLink').textContent = streamer.display_name || streamer.twitch_login;
+    const [sk, fo] = await Promise.all([
+      sb.from('skins').select('key,data').eq('streamer_id', streamer.id),
+      sb.from('fonts').select('family,path').eq('streamer_id', streamer.id)
+    ]);
+    (fo.data || []).forEach(f => {
+      try {
+        const face = new FontFace(f.family, 'url("' + CFG.supabaseUrl + '/storage/v1/object/public/fonts/' + f.path + '")');
+        face.load().then(ff => document.fonts.add(ff)).catch(() => {});
+      } catch (e) {}
+    });
+    skins = (sk.data || []).map(r => Object.assign({ key: r.key }, r.data))
+      .sort((a, b) => (a.builtin === b.builtin ? (a.order || 0) - (b.order || 0) : (a.builtin ? -1 : 1)));
+    if (!skins.some(canBuy)) { filter = 'all'; document.querySelectorAll('.chip').forEach(x => x.classList.toggle('active', x.dataset.f === 'all')); }
+    renderFeed();
+  }
+  load().then(initUser).catch(() => { $('feed').innerHTML = '<div class="state">Не получилось загрузить магазин. Обнови страницу.</div>'; });
+})();
+</script>
+</body>
+</html>

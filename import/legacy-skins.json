@@ -1,0 +1,158 @@
+{
+ "skins": {
+  "cult": {
+   "builtin": true,
+   "buyable": false,
+   "code": "культ",
+   "color": "#f3e6c8",
+   "font": "'Cinzel', serif",
+   "glow": "#b3140f",
+   "glowAmt": 28,
+   "h": 793,
+   "isDefault": false,
+   "key": "cult",
+   "label": "Cult of the Lamb",
+   "ls": 3,
+   "order": 0,
+   "pricePoints": null,
+   "priceRub": null,
+   "size": 20.5,
+   "stack": [
+    {
+     "digits": true
+    },
+    {
+     "img": "builtin"
+    }
+   ],
+   "twitchCategory": "Cult of the Lamb",
+   "useCategory": true,
+   "w": 1983,
+   "weight": 700,
+   "x": 53,
+   "y": 63
+  },
+  "jackbox": {
+   "builtin": true,
+   "buyable": false,
+   "code": "джекбокс",
+   "color": "#ffffff",
+   "font": "'Baloo 2', cursive",
+   "glow": "#c95fff",
+   "glowAmt": 22,
+   "h": 887,
+   "isDefault": false,
+   "key": "jackbox",
+   "label": "Jackbox Party Pack",
+   "ls": 1,
+   "order": 0,
+   "pricePoints": null,
+   "priceRub": null,
+   "size": 20.5,
+   "stack": [
+    {
+     "digits": true
+    },
+    {
+     "img": "builtin"
+    }
+   ],
+   "twitchCategory": "The Jackbox Party Pack",
+   "useCategory": true,
+   "w": 1774,
+   "weight": 800,
+   "x": 54,
+   "y": 57.5
+  },
+  "skin-mue4vulh8xvy": {
+   "builtin": false,
+   "buyable": false,
+   "code": "ирл",
+   "color": "#ffffff",
+   "font": "'Bubblegum Sans', sans-serif",
+   "glow": "#b9f3d8",
+   "glowAmt": 24,
+   "h": 887,
+   "isDefault": true,
+   "key": "skin-mue4vulh8xvy",
+   "label": "Новый скин",
+   "ls": 1,
+   "order": 1790169811109,
+   "pricePoints": null,
+   "priceRub": null,
+   "size": 20,
+   "stack": [
+    {
+     "digits": true
+    }
+   ],
+   "twitchCategory": "IRL",
+   "useCategory": true,
+   "w": 1774,
+   "weight": 400,
+   "x": 50,
+   "y": 45
+  },
+  "swamp": {
+   "builtin": true,
+   "buyable": false,
+   "code": "болото",
+   "color": "#f2f8ff",
+   "font": "'Playfair Display', serif",
+   "glow": "#6fb3ff",
+   "glowAmt": 26,
+   "h": 887,
+   "isDefault": false,
+   "key": "swamp",
+   "label": "Hollow Knight",
+   "ls": 1,
+   "order": 0,
+   "pricePoints": null,
+   "priceRub": null,
+   "size": 22,
+   "stack": [
+    {
+     "digits": true
+    },
+    {
+     "img": "builtin"
+    }
+   ],
+   "twitchCategory": "Just Chatting",
+   "useCategory": true,
+   "w": 1774,
+   "weight": 700,
+   "x": 56,
+   "y": 53.5
+  },
+  "vending": {
+   "back": "builtin",
+   "builtin": true,
+   "buyable": false,
+   "code": "автомат",
+   "color": "#eafcff",
+   "font": "'Press Start 2P', monospace",
+   "front": null,
+   "glow": "#ff2fd0",
+   "glowAmt": 22,
+   "h": 887,
+   "isDefault": false,
+   "key": "vending",
+   "label": "Vending Machine",
+   "ls": 2,
+   "order": 0,
+   "pricePoints": null,
+   "priceRub": null,
+   "size": 11.5,
+   "twitchCategory": "Interdimensional Vending Machine",
+   "useCategory": true,
+   "w": 1774,
+   "weight": 400,
+   "x": 51.5,
+   "y": 55.5
+  }
+ },
+ "settings": {
+  "boughtMinutes": 30
+ }
+}
