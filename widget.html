@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Таймер донатона</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;800&family=Playfair+Display:wght@600;700&family=Cinzel:wght@600;700&family=Press+Start+2P&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+<script src="js/config.js"></script>
+<script src="js/supabase.js"></script>
+<script src="js/fonts-extra.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body.preview { background:
+    linear-gradient(135deg, #1b1822 25%, transparent 25%) -16px 0/32px 32px, linear-gradient(135deg, transparent 75%, #1b1822 75%) -16px 0/32px 32px,
+    linear-gradient(135deg, #1b1822 25%, transparent 25%) 0 16px/32px 32px, linear-gradient(135deg, transparent 75%, #1b1822 75%) 0 16px/32px 32px, #121016; }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #stage { position: relative; width: 100vw; max-height: 100vh; container-type: inline-size; }
+  #stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+  .digits { position: absolute; white-space: nowrap; line-height: 1; transform: translate(-50%, -50%); font-variant-numeric: tabular-nums; }
+  .digits.zero { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  #toast {
+    position: fixed; left: 50%; top: 6%; transform: translate(-50%, 0); z-index: 50;
+    font: 800 clamp(16px, 4.2vw, 64px) 'Manrope', sans-serif; color: #fff; white-space: nowrap;
+    text-shadow: 0 0 6px #000, 0 2px 10px rgba(0,0,0,.8), 0 0 18px #ff5fa8; opacity: 0; pointer-events: none;
+  }
+  #toast.show { animation: toast 5s ease forwards; }
+  @keyframes toast { 0% { opacity: 0; transform: translate(-50%, 30%); } 8% { opacity: 1; transform: translate(-50%, 0); } 85% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -40%); } }
+  #err { position: fixed; left: 8px; bottom: 6px; font: 600 13px 'Manrope', sans-serif; color: #ffb3c6; text-shadow: 0 0 4px #000; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage"></div></div>
+<div id="toast"></div>
+<div id="err"></div>
+<script>
+(function(){
+  const CFG = window.SITE_CONFIG;
+  const params = new URLSearchParams(location.search);
+  const TOKEN = params.get('t') || '';
+  if (params.has('preview')) document.body.classList.add('preview');
+  const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+  const BUILTIN_IMG = { swamp: 'assets/skins/swamp.png', cult: 'assets/skins/cult.png', vending: 'assets/skins/vending.png', jackbox: 'assets/skins/jackbox.png' };
+  const stage = document.getElementById('stage');
+  const errEl = document.getElementById('err');
+  const toastEl = document.getElementById('toast');
+
+  let sid = null, skins = [], settings = {}, state = null, offset = 0;
+  let shownSkinKey = null, shownSkinStamp = '', digitsEl = null, lastEventAt = null;
+
+  function showErr(t){ errEl.textContent = t ? 'Таймер: ' + t : ''; }
+  async function api(action, extra){
+    const r = await fetch(CFG.supabaseUrl + '/functions/v1/timer-api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey },
+      body: JSON.stringify(Object.assign({ action, token: TOKEN }, extra || {}))
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || ('ошибка ' + r.status));
+    return j;
+  }
+
+  // ── вид ──
+  function refUrl(ref, key){
+    if (!ref) return '';
+    if (ref === 'builtin') return BUILTIN_IMG[key] || '';
+    if (ref.indexOf('sb:') === 0) return CFG.supabaseUrl + '/storage/v1/object/public/' + ref.slice(3);
+    if (ref.indexOf('data:') === 0 || ref.indexOf('assets/') === 0) return ref;
+    return '';
+  }
+  function stackOf(s){
+    if (Array.isArray(s.stack)) return s.stack;
+    const st = []; if (s.back) st.push({ img: s.back }); st.push({ digits: true }); if (s.front) st.push({ img: s.front }); return st;
+  }
+  function styleDigits(el, s){
+    el.style.left = s.x + '%'; el.style.top = s.y + '%';
+    el.style.fontFamily = s.font; el.style.fontWeight = s.weight;
+    el.style.fontSize = s.size + 'cqw'; el.style.letterSpacing = (s.ls / 7) + 'cqw'; el.style.color = s.color;
+    const g = s.glowAmt / 7;
+    el.style.textShadow = '0 0 0.45cqw #000, 0 0.3cqw 0.9cqw rgba(0,0,0,.7), 0 0 ' + (g * 0.5) + 'cqw ' + s.glow + ', 0 0 ' + g + 'cqw ' + s.glow;
+  }
+  function pickSkin(){
+    const now = Date.now() + offset;
+    if (state && state.active_skin && state.skin_until && Date.parse(state.skin_until) > now) {
+      const s = skins.find(k => k.key === state.active_skin); if (s) return s;
+    }
+    const cat = String((state && state.category) || '').trim().toLowerCase();
+    if (cat) {
+      const s = skins.find(k => k.useCategory && String(k.twitchCategory || '').trim().toLowerCase() === cat);
+      if (s) return s;
+    }
+    return skins.find(k => k.isDefault) || skins[0] || null;
+  }
+  function buildStage(s){
+    stage.innerHTML = '';
+    digitsEl = null;
+    if (!s) return;
+    stage.style.aspectRatio = (s.w || 1774) + ' / ' + (s.h || 887);
+    // если картинка выше экрана — уменьшаем по высоте
+    stage.style.width = 'min(100vw, calc(100vh * ' + (s.w || 1774) + ' / ' + (s.h || 887) + '))';
+    stackOf(s).forEach((it, idx) => {
+      if (it.digits) {
+        digitsEl = document.createElement('div'); digitsEl.className = 'digits';
+        styleDigits(digitsEl, s); digitsEl.style.zIndex = idx + 1; stage.appendChild(digitsEl); return;
+      }
+      const u = refUrl(it.img, s.key); if (!u) return;
+      const im = new Image(); im.src = u; im.alt = ''; im.style.zIndex = idx + 1; stage.appendChild(im);
+    });
+  }
+  function secondsLeft(){
+    if (!state) return null;
+    if (state.status === 'running') return Math.max(0, Math.ceil((Date.parse(state.ends_at) - (Date.now() + offset)) / 1000));
+    if (state.status === 'paused') return Math.max(0, state.remaining || 0);
+    return Math.round((Number(settings.startMinutes) || 60) * 60);
+  }
+  function fmt(sec){
+    const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    const p = n => String(n).padStart(2, '0');
+    return h ? h + ':' + p(m) + ':' + p(s) : p(m) + ':' + p(s);
+  }
+  function tick(){
+    const s = pickSkin();
+    const stamp = s ? s.key + '|' + JSON.stringify(s) : '';
+    if (stamp !== shownSkinStamp) { shownSkinStamp = stamp; shownSkinKey = s && s.key; buildStage(s); }
+    if (digitsEl) {
+      const left = secondsLeft();
+      const text = left == null ? '--:--' : fmt(left);
+      if (text.length !== digitsEl.textContent.length && s) {
+        // скин настроен под «28:41» (5 знаков); если есть часы — уменьшаем цифры, чтобы влезли
+        digitsEl.style.fontSize = (s.size * Math.min(1, 5 / text.length)) + 'cqw';
+      }
+      digitsEl.textContent = text;
+      digitsEl.classList.toggle('zero', state && state.status === 'running' && left === 0);
+    }
+  }
+  function fmtShort(sec){
+    const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    return (h ? h + ' ч ' : '') + (m ? m + ' мин' : '') + (!h && !m ? s + ' сек' : (s && !h ? ' ' + s + ' сек' : ''));
+  }
+  function maybeToast(){
+    const ev = state && state.last_event;
+    if (!ev || !ev.at || ev.at === lastEventAt) return;
+    const fresh = Date.now() + offset - Date.parse(ev.at) < 30000;
+    const first = lastEventAt === null;
+    lastEventAt = ev.at;
+    if (first || !fresh) return;
+    let text = '';
+    if (ev.skin) text = 'Скин «' + ev.skin + '»' + (ev.seconds ? ' и +' + fmtShort(ev.seconds) : '');
+    else if (ev.seconds) text = '+' + fmtShort(ev.seconds);
+    if (!text) return;
+    if (ev.who) text += ' · ' + ev.who;
+    toastEl.textContent = text;
+    toastEl.classList.remove('show'); void toastEl.offsetWidth; toastEl.classList.add('show');
+  }
+  function onState(st){ if (st) state = st; maybeToast(); tick(); }
+
+  // ── данные ──
+  async function loadSkins(){
+    const [sk, fo, st] = await Promise.all([
+      sb.from('skins').select('key,data').eq('streamer_id', sid),
+      sb.from('fonts').select('family,path').eq('streamer_id', sid),
+      sb.from('streamers').select('settings').eq('id', sid).maybeSingle()
+    ]);
+    if (sk.data) skins = sk.data.map(r => Object.assign({}, r.data, { key: r.key }));
+    if (st.data) settings = st.data.settings || {};
+    (fo.data || []).forEach(f => {
+      if (document.fonts && [...document.fonts].some(x => x.family === f.family)) return;
+      try { new FontFace(f.family, 'url("' + CFG.supabaseUrl + '/storage/v1/object/public/fonts/' + f.path + '")').load().then(ff => document.fonts.add(ff)).catch(() => {}); } catch (e) {}
+    });
+    tick();
+  }
+  async function loadState(){
+    const r = await sb.from('timer_state').select('*').eq('streamer_id', sid).maybeSingle();
+    if (r.data) onState(r.data);
+  }
+
+  // ── DonationAlerts: слушаем донаты ──
+  let daInfo = null, daSocket = null, daRetry = 2000;
+  function connectDA(){
+    if (!daInfo) return;
+    try { if (daSocket) daSocket.close(); } catch (e) {}
+    const ws = new WebSocket('wss://centrifugo.donationalerts.com/connection/websocket');
+    daSocket = ws;
+    ws.onopen = () => { ws.send(JSON.stringify({ params: { token: daInfo.socketToken }, id: 1 })); };
+    ws.onmessage = async (m) => {
+      const lines = String(m.data).split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let msg; try { msg = JSON.parse(line); } catch (e) { continue; }
+        if (msg && typeof msg === 'object' && Object.keys(msg).length === 0) { ws.send('{}'); continue; }
+        if (msg.id === 1 && msg.result && msg.result.client) {
+          try {
+            const r = await api('da-subscribe', { userId: daInfo.userId, client: msg.result.client });
+            const ch = (r.channels || [])[0];
+            if (ch) ws.send(JSON.stringify({ params: { channel: ch.channel, token: ch.token }, method: 1, id: 2 }));
+            daRetry = 2000; showErr('');
+          } catch (e) { showErr('не получилось подписаться на донаты — ' + e.message); }
+          continue;
+        }
+        const pub = msg.result && msg.result.data && msg.result.data.data;
+        if (pub && pub.id != null) {
+          api('da-event', { donation: pub }).catch(e => showErr('донат не засчитался — ' + e.message));
+        }
+      }
+    };
+    ws.onclose = () => {
+      setTimeout(async () => {
+        try { const j = await api('init'); daInfo = j.da; connectDA(); } catch (e) { showErr('нет связи — ' + e.message); setTimeout(connectDA, daRetry); }
+      }, daRetry);
+      daRetry = Math.min(daRetry * 2, 60000);
+    };
+  }
+
+  // ── запуск ──
+  async function start(){
+    if (!TOKEN) { showErr('в ссылке нет ключа — скопируй ссылку из конструктора'); return; }
+    let j;
+    try {
+      const t0 = Date.now();
+      j = await api('init');
+      if (j.now) offset = j.now - Math.round((t0 + Date.now()) / 2);
+    } catch (e) { showErr(e.message); setTimeout(start, 15000); return; }
+    sid = j.streamerId;
+    daInfo = j.da;
+    await loadSkins();
+    await loadState();
+    sb.channel('timer-' + sid)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'timer_state', filter: 'streamer_id=eq.' + sid }, p => onState(p.new))
+      .subscribe();
+    if (daInfo) connectDA();
+    else showErr(params.has('preview') ? 'DonationAlerts не подключён — донаты не придут' : '');
+    setInterval(tick, 250);
+    setInterval(() => loadState().catch(() => {}), 20000);   // страховка, если мгновенные обновления отвалятся
+    setInterval(() => loadSkins().catch(() => {}), 60000);   // подхватить правки из конструктора
+  }
+  start();
+})();
+</script>
+</body>
+</html>

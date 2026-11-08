@@ -286,6 +286,18 @@
   .radioList { display: flex; flex-direction: column; gap: 8px; }
   .tierRow { display: grid; grid-template-columns: 1fr 110px; gap: 6px; }
 
+  /* ── пульт таймера ── */
+  .liveGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .liveCard { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .liveCard h4 { margin: 0; font-size: 14px; }
+  .bigTime { font: 800 44px var(--mono); letter-spacing: .02em; color: var(--text); line-height: 1; }
+  .btn.go { background: var(--accent-2); color: #0e2a0c; border-color: var(--accent-2); }
+  .connRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--panel-3); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .linkRow { display: flex; gap: 6px; }
+  .linkRow input { font-family: var(--mono); font-size: 12px; }
+  .evList { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+  .evRow { font-size: 12px; color: var(--text-dim); background: var(--panel-3); border-radius: 7px; padding: 6px 8px; line-height: 1.4; }
+
   /* ── нижняя панель сохранения ── */
   #saveBar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
@@ -328,6 +340,72 @@
   </header>
 
   <div id="migrateBanner" class="banner" hidden>Подставила твои скины из старого конструктора. Проверь их и нажми «Сохранить» внизу — тогда они переедут на сайт насовсем.</div>
+
+  <section class="group" id="liveSec">
+    <h3>Таймер на стриме</h3>
+    <div class="banner" id="liveBanner" hidden></div>
+    <div class="liveGrid">
+      <div class="liveCard">
+        <h4>Пульт</h4>
+        <div class="bigTime" id="lvTime">--:--</div>
+        <div class="hint" id="lvStatus">Загружаю…</div>
+        <div class="btnRow">
+          <button class="btn go" id="lvStart">▶ Старт</button>
+          <button class="btn" id="lvPause">⏸ Пауза</button>
+          <button class="btn" id="lvAdd">+5 мин</button>
+          <button class="btn" id="lvSub">−5 мин</button>
+          <button class="btn" id="lvSet">Поставить время…</button>
+          <button class="btn danger" id="lvReset">Сброс</button>
+        </div>
+        <div class="row">
+          <div class="rowhead"><span>Скин на экране</span></div>
+          <select id="lvSkin"></select>
+          <div class="hint" id="lvCat"></div>
+        </div>
+      </div>
+
+      <div class="liveCard">
+        <h4>Подключения</h4>
+        <div class="connRow">
+          <div><b>DonationAlerts</b><div class="hint" id="cnDa">не подключён</div></div>
+          <button class="btn" id="cnDaBtn">Подключить</button>
+        </div>
+        <div class="connRow">
+          <div><b>Twitch</b> <span class="hint">(подписки, битсы, баллы, категория)</span><div class="hint" id="cnTw">не подключён</div></div>
+          <button class="btn" id="cnTwBtn">Подключить</button>
+        </div>
+        <button class="btn" id="cnRewards">Обновить награды за баллы на Twitch</button>
+        <div class="hint" id="cnMsg"></div>
+      </div>
+
+      <div class="liveCard">
+        <h4>Ссылка для OBS</h4>
+        <div class="hint">OBS → Источники → «+» → <b>Браузер</b> → вставь ссылку. Ширина 1200, высота 600 (потом можно растянуть мышкой). Ссылка секретная — не показывай её на стриме.</div>
+        <div class="linkRow"><input type="text" id="wgLink" readonly value="Загружаю…"><button class="btn" id="wgCopy">Копировать</button></div>
+        <div class="btnRow">
+          <a class="btn" id="wgOpen" target="_blank" rel="noopener">Открыть превью</a>
+          <button class="btn danger" id="wgNew">Сделать новую ссылку</button>
+        </div>
+        <div class="hint" id="wgMsg"></div>
+      </div>
+
+      <div class="liveCard">
+        <h4>Проверка без денег</h4>
+        <div class="hint">Тестовый донат работает как настоящий: добавит время или включит скин по коду. Деньги не списываются.</div>
+        <div class="twoCol">
+          <div><label for="tsAmount">Сумма, ₽</label><input type="number" id="tsAmount" value="100" min="1"></div>
+          <div><label for="tsMsg">Сообщение</label><input type="text" id="tsMsg" placeholder="#культ +время"></div>
+        </div>
+        <div class="btnRow">
+          <button class="btn" id="tsDon">Тестовый донат</button>
+          <button class="btn" id="tsSub">Тест: подписка</button>
+        </div>
+        <div class="hint" id="tsResult"></div>
+        <h4 style="margin-top:6px">Последние события</h4>
+        <div id="evList" class="evList"><div class="hint">Пока пусто.</div></div>
+      </div>
+    </div>
+  </section>
 
   <section>
     <div class="secHead">
@@ -1346,6 +1424,198 @@
   digitsEl.addEventListener('pointerup', () => { dragging = false; });
   digitsEl.addEventListener('pointercancel', () => { dragging = false; });
 
+  // ── таймер на стриме: пульт, подключения, ссылка для OBS ──
+  const TWITCH_SCOPES = 'channel:read:subscriptions bits:read channel:read:redemptions channel:manage:redemptions';
+  let liveState = null, liveStarted = false, integ = null;
+
+  async function api(action, payload){
+    const r = await sb.functions.invoke('timer-api', { body: Object.assign({ action }, payload || {}) });
+    if (r.error) {
+      let msg = r.error.message || 'ошибка';
+      try { const j = await r.error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
+      throw new Error(msg);
+    }
+    return r.data;
+  }
+  function liveLeft(t){
+    if (t && t.status === 'running') return Math.max(0, Math.ceil((Date.parse(t.ends_at) - Date.now()) / 1000));
+    if (t && t.status === 'paused') return Math.max(0, t.remaining || 0);
+    return Math.round((Number(draftSettings.startMinutes) || 60) * 60);
+  }
+  function hms(sec){
+    const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60, p = n => String(n).padStart(2, '0');
+    return (h ? h + ':' + p(m) : p(m)) + ':' + p(s);
+  }
+  function liveBanner(text, ok){
+    const b = $('liveBanner'); b.textContent = text; b.hidden = !text; b.className = 'banner' + (ok === false ? ' warn' : '');
+  }
+  function renderLive(){
+    const t = liveState;
+    $('lvTime').textContent = hms(liveLeft(t));
+    const st = t ? t.status : 'idle';
+    $('lvStatus').textContent = st === 'running' ? 'Идёт — время тикает и растёт от донатов'
+      : st === 'paused' ? 'На паузе — донаты всё равно добавляют время'
+      : 'Не запущен — нажми «Старт» на стриме (начнёт с ' + (draftSettings.startMinutes || 60) + ' мин)';
+    $('lvStart').textContent = st === 'idle' ? '▶ Старт' : '↺ Начать заново';
+    $('lvPause').textContent = st === 'paused' ? '▶ Продолжить' : '⏸ Пауза';
+    $('lvPause').disabled = st === 'idle';
+    const sel = $('lvSkin');
+    const want = t && t.active_skin && t.skin_until && Date.parse(t.skin_until) > Date.now() ? t.active_skin : '';
+    if (document.activeElement !== sel) {
+      sel.innerHTML = '';
+      const o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'Авто — по категории Twitch'; sel.appendChild(o0);
+      orderedKeys().forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = drafts[k].label || k; sel.appendChild(o); });
+      sel.value = want;
+    }
+    let cat = t && t.category ? 'Сейчас на Twitch: ' + t.category : 'Категория Twitch появится после подключения Twitch.';
+    if (want) cat += ' · купленный скин держится до ' + new Date(t.skin_until).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    $('lvCat').textContent = cat;
+  }
+  async function loadLive(){
+    const r = await sb.from('timer_state').select('*').eq('streamer_id', streamer.id).maybeSingle();
+    liveState = r.data || null;
+    renderLive();
+  }
+  async function control(action, seconds){
+    const r = await sb.rpc('timer_control', { action, seconds: seconds || 0 });
+    if (r.error) { liveBanner('Не получилось: ' + r.error.message, false); return; }
+    liveState = r.data; renderLive();
+    if ((action === 'start' || action === 'reset') && integ && integ.twitch) api('rewards-sync').catch(() => {});
+  }
+  $('lvStart').addEventListener('click', () => {
+    if (liveState && liveState.status !== 'idle' && !confirm('Начать таймер заново с ' + (draftSettings.startMinutes || 60) + ' мин? Текущее время пропадёт.')) return;
+    control('start', 0);
+  });
+  $('lvPause').addEventListener('click', () => control(liveState && liveState.status === 'paused' ? 'resume' : 'pause'));
+  $('lvAdd').addEventListener('click', () => control('add', 300));
+  $('lvSub').addEventListener('click', () => control('add', -300));
+  $('lvSet').addEventListener('click', () => {
+    const v = prompt('Сколько поставить? Например: 90 (минут) или 1:30:00', '');
+    if (v == null) return;
+    let sec = 0;
+    if (v.indexOf(':') >= 0) { const p = v.split(':').map(Number); sec = p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]; }
+    else sec = Math.round(Number(v.replace(',', '.')) * 60);
+    if (!(sec >= 0)) { liveBanner('Не поняла время — напиши минуты числом или ч:мм:сс', false); return; }
+    control('set', sec);
+  });
+  $('lvReset').addEventListener('click', () => { if (confirm('Сбросить таймер? Он остановится, время обнулится.')) control('reset'); });
+  $('lvSkin').addEventListener('change', async () => {
+    const v = $('lvSkin').value || null;
+    const r = await sb.rpc('timer_set_skin', { skin: v, minutes: Number(draftSettings.boughtMinutes) || 30 });
+    if (r.error) liveBanner('Не получилось сменить скин: ' + r.error.message, false);
+    else { liveState = r.data; renderLive(); $('lvSkin').blur(); }
+  });
+
+  // подключения
+  async function loadIntegrations(){
+    const r = await sb.rpc('integration_status');
+    if (r.error) { $('cnMsg').textContent = 'Не получилось узнать подключения: ' + r.error.message; return; }
+    integ = r.data || {};
+    $('cnDa').textContent = integ.da ? 'подключён' + (integ.da.name ? ' · ' + integ.da.name : '') : 'не подключён';
+    $('cnDaBtn').textContent = integ.da ? 'Переподключить' : 'Подключить';
+    $('cnTw').textContent = integ.twitch ? 'подключён · ' + integ.twitch.login : 'не подключён';
+    $('cnTwBtn').textContent = integ.twitch ? 'Переподключить' : 'Подключить';
+    $('cnRewards').hidden = !integ.twitch;
+  }
+  $('cnDaBtn').addEventListener('click', async () => {
+    const r = await sb.rpc('create_oauth_state', { kind: 'da' });
+    if (r.error) { $('cnMsg').textContent = 'Не получилось: ' + r.error.message; return; }
+    const u = 'https://www.donationalerts.com/oauth/authorize?' + new URLSearchParams({
+      client_id: CFG.donationAlertsAppId, response_type: 'code', state: r.data,
+      redirect_uri: CFG.supabaseUrl + '/functions/v1/da-callback',
+      scope: 'oauth-user-show oauth-donation-subscribe oauth-donation-index'
+    }).toString();
+    if (pendingCount() && !confirm('Есть несохранённые изменения — они пропадут при переходе. Продолжить?')) return;
+    location.href = u;
+  });
+  $('cnTwBtn').addEventListener('click', async () => {
+    if (pendingCount() && !confirm('Есть несохранённые изменения — они пропадут при переходе. Продолжить?')) return;
+    await sb.auth.signInWithOAuth({ provider: 'twitch', options: { scopes: TWITCH_SCOPES, redirectTo: location.origin + location.pathname + '?connect=twitch' } });
+  });
+  function rewardsText(rw){
+    const names = { t1: 'уровень 1', t2: 'уровень 2', t3: 'уровень 3', time: '«+время»' };
+    const parts = Object.keys(rw || {}).map(k => (names[k] || k) + ': ' + rw[k]);
+    return parts.length ? 'Награды — ' + parts.join(', ') : 'Наград пока нет: отметь у скинов уровень баллов или включи «+ время».';
+  }
+  $('cnRewards').addEventListener('click', async () => {
+    $('cnMsg').textContent = 'Обновляю награды…';
+    try { const r = await api('rewards-sync'); $('cnMsg').textContent = rewardsText(r.rewards); }
+    catch (e) { $('cnMsg').textContent = 'Не получилось: ' + e.message; }
+  });
+
+  // ссылка для OBS
+  function setWidgetLink(tok){
+    const base = location.origin + location.pathname.replace(/admin\.html$/, '');
+    const link = base + 'widget.html?t=' + tok;
+    $('wgLink').value = link;
+    $('wgOpen').href = link + '&preview';
+  }
+  async function loadWidgetLink(){
+    const r = await sb.rpc('get_widget_token');
+    if (r.error) { $('wgMsg').textContent = 'Не получилось получить ссылку: ' + r.error.message; return; }
+    setWidgetLink(r.data);
+  }
+  $('wgCopy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('wgLink').value); $('wgMsg').textContent = 'Скопировано.'; }
+    catch (e) { $('wgLink').select(); $('wgMsg').textContent = 'Выделила — нажми Ctrl+C.'; }
+  });
+  $('wgNew').addEventListener('click', async () => {
+    if (!confirm('Старая ссылка перестанет работать — в OBS нужно будет вставить новую. Сделать?')) return;
+    const r = await sb.rpc('regenerate_widget_token');
+    if (r.error) { $('wgMsg').textContent = 'Не получилось: ' + r.error.message; return; }
+    setWidgetLink(r.data); $('wgMsg').textContent = 'Готово. Вставь новую ссылку в OBS.';
+  });
+
+  // проверка
+  async function loadEvents(){
+    const r = await sb.from('timer_events').select('*').eq('streamer_id', streamer.id).order('created_at', { ascending: false }).limit(8);
+    const box = $('evList'); box.innerHTML = '';
+    if (!r.data || !r.data.length) { box.innerHTML = '<div class="hint">Пока пусто.</div>'; return; }
+    const kinds = { donation: 'донат', sub: 'подписка', bits: 'битсы', reward: 'баллы' };
+    r.data.forEach(e => {
+      const row = document.createElement('div'); row.className = 'evRow';
+      const when = new Date(e.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      const what = (kinds[e.kind] || e.kind) + (e.amount != null ? ' ' + Number(e.amount).toLocaleString('ru-RU') + (e.kind === 'donation' ? ' ₽' : '') : '');
+      const res = (e.seconds ? '+' + hms(e.seconds) : '') + (e.note ? (e.seconds ? ' · ' : '') + e.note : '');
+      row.textContent = when + ' · ' + (e.who || '—') + ' · ' + what + (res ? ' → ' + res : '') + (String(e.id).indexOf('test:') === 0 ? ' (тест)' : '');
+      box.appendChild(row);
+    });
+  }
+  async function testEvent(kind){
+    $('tsResult').textContent = 'Отправляю…';
+    try {
+      const r = await api('test-event', { kind, amount: Number($('tsAmount').value) || 0, message: $('tsMsg').value, name: 'Тест' });
+      $('tsResult').textContent = (r.seconds ? 'Добавлено ' + hms(r.seconds) + '. ' : 'Время не добавлено' + (liveState && liveState.status === 'idle' ? ' (таймер не запущен). ' : '. ')) + (r.note || '');
+      loadLive(); loadEvents();
+    } catch (e) { $('tsResult').textContent = 'Не получилось: ' + e.message; }
+  }
+  $('tsDon').addEventListener('click', () => testEvent('donation'));
+  $('tsSub').addEventListener('click', () => testEvent('sub'));
+
+  async function initLive(session){
+    if (liveStarted) return; liveStarted = true;
+    const q = new URLSearchParams(location.search);
+    if (q.get('da')) {
+      const m = { ok: 'DonationAlerts подключён — донаты будут приходить в таймер.', denied: 'Ты не разрешила доступ в DonationAlerts.', expired: 'Ссылка подключения устарела — нажми «Подключить» ещё раз.', error: 'DonationAlerts не подключился. Проверь, что в Supabase добавлен секрет DA_CLIENT_SECRET, и попробуй ещё раз.' };
+      liveBanner(m[q.get('da')] || m.error, q.get('da') === 'ok');
+    }
+    if (q.get('connect') === 'twitch') {
+      if (session && session.provider_token) {
+        liveBanner('Подключаю Twitch…');
+        try {
+          const r = await api('twitch-save', { access_token: session.provider_token, refresh_token: session.provider_refresh_token });
+          const badHooks = Object.keys(r.hooks || {}).filter(k => r.hooks[k] !== 'ok');
+          liveBanner('Twitch подключён (' + r.login + ').' + (r.missing && r.missing.length ? ' Не хватает разрешений: ' + r.missing.join(', ') + '.' : '')
+            + (badHooks.length ? ' Не все события подключились: ' + badHooks.join(', ') + '.' : ' Подписки, битсы, баллы и категория будут приходить сами.'), !badHooks.length);
+        } catch (e) { liveBanner('Twitch не подключился: ' + e.message, false); }
+      } else liveBanner('Twitch не вернул разрешение — нажми «Подключить» ещё раз.', false);
+    }
+    if (q.get('da') || q.get('connect')) history.replaceState(null, '', location.pathname);
+    await Promise.all([loadLive(), loadIntegrations(), loadWidgetLink(), loadEvents()]).catch(() => {});
+    setInterval(() => { if (liveState) renderLive(); }, 1000);
+    setInterval(() => { if (!document.hidden) { loadLive().catch(() => {}); loadEvents().catch(() => {}); } }, 8000);
+  }
+
   // ── панель сохранения ──
   function pendingCount(){ return dirty.size + (settingsDirty ? 1 : 0); }
   function updateSaveBar(){
@@ -1414,6 +1684,7 @@
         savedSettings = clone(draftSettings); settingsDirty = false; needMigratedFlag = false;
       }
       $('migrateBanner').hidden = true;
+      if (integ && integ.twitch) api('rewards-sync').catch(() => {});
       const t = new Date();
       statusOverride = { cls: 'ok', text: 'Сохранено в ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ' — магазин и все устройства уже видят изменения' };
     } catch (e) {
@@ -1533,6 +1804,7 @@
     mode = 'cloud';
     try { await loadAll(true); }
     catch (e) { statusOverride = { cls: 'err', text: explain(e) }; updateSaveBar(); }
+    initLive(session).catch(() => {});
   }
 
   // Вернулась на вкладку — подтянуть изменения с других устройств (если нет своих несохранённых)
